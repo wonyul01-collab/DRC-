@@ -18,11 +18,15 @@ shotlist.json 형식:
 {
   "id": "2026-08-13-01",
   "shots": [
-    {"clip": "out/video/raw/01.mp4", "narration": "읽을 문장", "subtitle": "띄울 자막"},
+    {"clip": "out/video/raw/01.mp4", "narration": "읽을 문장", "subtitle": "띄울 자막",
+     "note": "체중 70kg 기준"},
     {"clip": "out/video/raw/02.mp4", "narration": "다음 문장"}
   ]
 }
   - subtitle 을 생략하면 narration 을 그대로 자막으로 씁니다.
+  - note 는 보조 자막입니다. 출처·기준값·다음 편 예고처럼 본문을 방해하지 않고
+    작게 깔아야 하는 것에 씁니다. 쪼개지 않고 그 shot 전체에 한 줄로 표시됩니다.
+    크기·색·위치는 스타일 파일의 subtitle.secondary 에서 조정합니다.
   - voice.provider 가 none 이면 각 shot 에 "duration"(초)이 있어야 합니다.
   - narration 이 빈 문자열이면 그 shot 은 무음으로 처리하고 duration 을 씁니다.
 """
@@ -238,31 +242,65 @@ def chunk_text(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def build_ass(cues: list[tuple[float, float, str]], sub_cfg: dict) -> str:
-    font_name = sub_cfg.get("font_family", "Noto Sans KR")
+def _style_line(name: str, font_name: str, cfg: dict, defaults: dict) -> str:
+    def get(key: str):
+        return cfg.get(key, defaults[key])
+
+    return ",".join([
+        name,
+        font_name,
+        str(get("font_size")),
+        get("primary_color"),
+        "&H000000FF",                                   # SecondaryColour (미사용)
+        get("outline_color"),
+        "&H00000000",                                   # BackColour
+        "-1" if get("bold") else "0",
+        "0", "0", "0",                                  # Italic, Underline, StrikeOut
+        "100", "100", "0", "0",                         # Scale/Spacing/Angle
+        "1",                                            # BorderStyle: outline+shadow
+        str(get("outline_width")),
+        str(get("shadow")),
+        str(get("alignment")),
+        "80", "80",                                     # MarginL, MarginR
+        str(get("margin_vertical")),
+        "1",                                            # Encoding
+    ])
+
+
+# 보조 자막(출처·기준·다음 편 예고)의 기본값. 본 자막보다 작고, 더 아래에,
+# 흰색이 아닌 회색으로 깔립니다. 본문을 방해하지 않는 것이 목적입니다.
+SECONDARY_DEFAULTS = {
+    "font_size": 38,
+    "primary_color": "&H00C8C8C8",   # 밝은 회색
+    "outline_color": "&H00000000",
+    "outline_width": 3,
+    "shadow": 0,
+    "bold": False,
+    "alignment": 2,                  # 하단 중앙
+    "margin_vertical": 210,          # 본 자막(기본 320)보다 아래
+}
+PRIMARY_DEFAULTS = {
+    "font_size": 72,
+    "primary_color": "&H00FFFFFF",
+    "outline_color": "&H00000000",
+    "outline_width": 4,
+    "shadow": 0,
+    "bold": True,
+    "alignment": 2,
+    "margin_vertical": 320,
+}
+
+
+def build_ass(cues: list[tuple[float, float, str, str]], sub_cfg: dict) -> str:
+    """cues 는 (시작, 끝, 텍스트, 스타일명). 스타일명은 Default 또는 Note."""
+    font_name = sub_cfg.get("font_family", "Pretendard")
     if sub_cfg.get("font_file"):
         # fontsdir 로 폰트를 넘길 때도 FontName 은 파일의 실제 패밀리명이어야 합니다.
         font_name = sub_cfg.get("font_family") or Path(sub_cfg["font_file"]).stem
 
-    style = ",".join([
-        "Default",
-        font_name,
-        str(sub_cfg.get("font_size", 72)),
-        sub_cfg.get("primary_color", "&H00FFFFFF"),
-        "&H000000FF",                                   # SecondaryColour (미사용)
-        sub_cfg.get("outline_color", "&H00000000"),
-        "&H00000000",                                   # BackColour
-        "-1" if sub_cfg.get("bold", True) else "0",
-        "0", "0", "0",                                  # Italic, Underline, StrikeOut
-        "100", "100", "0", "0",                         # Scale/Spacing/Angle
-        "1",                                            # BorderStyle: outline+shadow
-        str(sub_cfg.get("outline_width", 4)),
-        str(sub_cfg.get("shadow", 0)),
-        str(sub_cfg.get("alignment", 2)),
-        "80", "80",                                     # MarginL, MarginR
-        str(sub_cfg.get("margin_vertical", 320)),
-        "1",                                            # Encoding
-    ])
+    secondary_cfg = sub_cfg.get("secondary") or {}
+    # 보조 자막도 같은 폰트를 쓰되, 따로 지정하면 그쪽을 따릅니다.
+    note_font = secondary_cfg.get("font_family", font_name)
 
     lines = [
         "[Script Info]",
@@ -276,14 +314,15 @@ def build_ass(cues: list[tuple[float, float, str]], sub_cfg: dict) -> str:
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: {style}",
+        f"Style: {_style_line('Default', font_name, sub_cfg, PRIMARY_DEFAULTS)}",
+        f"Style: {_style_line('Note', note_font, secondary_cfg, SECONDARY_DEFAULTS)}",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
-    for start, end, text in cues:
+    for start, end, text, style_name in cues:
         safe = text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
-        lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{safe}")
+        lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},{style_name},,0,0,0,,{safe}")
     return "\n".join(lines) + "\n"
 
 
@@ -359,7 +398,7 @@ def cmd_build(args: argparse.Namespace) -> None:
 
     seg_videos: list[Path] = []
     seg_audios: list[Path] = []
-    cues: list[tuple[float, float, str]] = []
+    cues: list[tuple[float, float, str, str]] = []
     timeline = 0.0
 
     for idx, shot in enumerate(shots):
@@ -432,8 +471,14 @@ def cmd_build(args: argparse.Namespace) -> None:
             cursor = timeline + lead
             for piece in pieces:
                 span = duration * (len(piece) / total_chars)
-                cues.append((cursor, cursor + span, piece))
+                cues.append((cursor, cursor + span, piece, "Default"))
                 cursor += span
+
+        # 4-A) 보조 자막 — 출처, 기준값, 다음 편 예고 같은 것.
+        #      쪼개지 않고 shot 전체에 한 줄로 깔린다. 본 자막보다 작고 아래에 있다.
+        note = (shot.get("note") or "").strip()
+        if note:
+            cues.append((timeline, timeline + duration, note, "Note"))
 
         timeline += duration
 
@@ -473,7 +518,8 @@ def cmd_build(args: argparse.Namespace) -> None:
         "output": str(out_path),
         "duration_seconds": round(timeline, 2),
         "shots": len(shots),
-        "subtitle_cues": len(cues),
+        "subtitle_cues": sum(1 for c in cues if c[3] == "Default"),
+        "note_cues": sum(1 for c in cues if c[3] == "Note"),
         "narration": "none" if silent else voice_cfg.get("name", ""),
     }
     if timeline > 60:

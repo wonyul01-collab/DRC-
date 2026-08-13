@@ -88,13 +88,21 @@ description: 기획안을 받아 대본을 쓰고 Higgsfield MCP로 클립을 �
       "clip": "../video/raw/2026-08-13-01/01.mp4",
       "narration": "이 컷에서 읽을 문장",
       "subtitle": "화면에 띄울 자막 (생략하면 narration 사용)",
+      "note": "체중 70kg 기준",
       "visual_prompt": "Higgsfield 에 넣을 장면 묘사"
     }
   ]
 }
 ```
 
-`visual_prompt` 는 합성 스크립트가 쓰지 않는다. 다음 단계에서 쓰는 메모다.
+- `subtitle` — 본 자막. `max_chars_per_cue` 단위로 잘려 순차 표시된다.
+- `note` — **보조 자막.** 본 자막보다 작고 회색으로 아래에 깔리며, 쪼개지 않고
+  그 shot 내내 한 줄로 표시된다. 크기·색·위치는 `subtitle.secondary` 에서 조정한다.
+  아래 세 가지에 쓴다. 정직함을 화면에서 지키는 수단이다.
+  - **기준값** — "체중 70kg 기준" 처럼 숫자를 해석하는 데 필요한 전제
+  - **출처·한계** — "계측 인공관절 5명 측정값" 처럼 표본의 한계
+  - **다음 편 예고** — 마지막 shot 에 걸어 구독 동기를 만든다
+- `visual_prompt` — 합성 스크립트가 쓰지 않는다. 클립 생성 단계에서 쓰는 메모다.
 
 ### 4. 클립 생성 (Higgsfield MCP)
 
