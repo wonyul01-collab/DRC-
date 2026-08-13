@@ -24,17 +24,45 @@ description: 기획안을 받아 대본을 쓰고 Higgsfield MCP로 클립을 �
 | `style_path` | 레퍼런스 스타일 경로 |
 | `output_dir` | 생성물 저장 위치 |
 | `scripts_dir` | 파이썬 스크립트 위치 |
-| `daily_video_cap` | 하루 최대 생성 편수 (크레딧 폭주 방지) |
+| `daily_video_cap` | 하루 최대 생성 편수 (폭주 루프 차단) |
+| `max_clips_per_video` | 편당 최대 생성 클립 수 (**실질적인 비용 통제선**) |
+| `min_credit_floor` | 잔량이 이 아래면 생성 중단 |
+| `measured_credits_per_video` | 실측된 편당 크레딧. `null` 이면 아직 미측정 |
 | `default_privacy` | 업로드 공개 범위 (기본 `private`) |
 
 ## 절차
 
 ### 1. 사전 점검 — 크레딧을 쓰기 전에 반드시
 
-- 오늘 이미 만든 편수를 `{output_dir}/log.jsonl` 에서 센다.
-  `daily_video_cap` 에 도달했으면 **생성하지 말고 중단**하고 보고한다.
-- 기획안의 `risk` 가 `none` 이 아니면 생성 전에 사용자에게 확인받는다.
-- `reference-style.yaml` 을 읽어 이번 회차가 지킬 규칙을 파악한다.
+크레딧은 곧 돈이고, 한 번 쓰면 되돌릴 수 없다. 순서대로 확인한다.
+
+1. **잔량 조회** — Higgsfield `balance` 툴을 호출한다.
+   `min_credit_floor` 보다 적으면 **생성하지 말고 중단**하고 보고한다.
+2. **오늘 편수** — `{output_dir}/log.jsonl` 에서 센다.
+   `daily_video_cap` 에 도달했으면 중단하고 보고한다.
+3. **예산 추정** — `measured_credits_per_video` 가 있으면
+   `잔량 - 예상비용 < min_credit_floor` 인지 확인한다. 걸리면 중단한다.
+4. 기획안의 `risk` 가 `none` 이 아니면 생성 전에 사용자에게 확인받는다.
+5. `reference-style.yaml` 을 읽어 이번 회차가 지킬 규칙을 파악한다.
+
+> **편수 상한은 비용 통제가 아니다.** 쇼츠 1편은 생성 1회가 아니라 컷 여러 개다.
+> 20컷을 전부 새로 뽑으면 편당 300~900 크레딧이 나간다.
+> 실제 방어선은 `max_clips_per_video` 다.
+
+### 1-A. 첫 영상은 측정용이다
+
+`measured_credits_per_video` 가 `null` 이면 아직 편당 비용을 모르는 상태다.
+이때는 **본편을 만들지 말고 측정부터 한다.**
+
+1. 클립 **3~4개짜리** 짧은 영상으로 만든다 (15초 내외).
+2. 만들기 전후로 `balance` 를 호출해 차감량을 기록한다.
+   `transactions` 로 항목별 단가도 확인한다.
+3. 결과를 사용자에게 보고하고, `measured_credits_per_video` 와
+   `max_clips_per_video` 를 실측에 맞춰 조정하자고 제안한다.
+4. 그 전까지는 본편 제작을 시작하지 않는다.
+
+추정으로 본편을 만들다가 크레딧이 중간에 떨어지면, 이미 쓴 크레딧은
+못 돌려받고 영상은 미완성으로 남는다. 가장 비싼 실패다.
 
 ### 2. 대본 작성 — 스타일을 따른다
 
@@ -74,6 +102,10 @@ description: 기획안을 받아 대본을 쓰고 Higgsfield MCP로 클립을 �
 - 종횡비는 `visual.aspect_ratio` (기본 **9:16**).
 - 프롬프트에 `visual.mood`, `visual.camera`, `visual.subject_type` 을 반영한다.
   기획안의 `visual_direction` 을 구체적 장면 묘사로 풀어 쓴다.
+- **생성할 클립 수가 `max_clips_per_video` 를 넘지 않게 한다.**
+  컷이 20개여도 클립은 8개면 된다. 같은 클립을 여러 shot 이 나눠 쓰고,
+  자막·나레이션이 바뀌면 시청자에게는 다른 컷으로 읽힌다.
+  이게 편당 비용을 절반 이하로 줄이는 가장 확실한 방법이다.
 - **한 컷씩 순차 생성.** 병렬로 돌리지 않는다 (크레딧·레이트리밋).
 - **클립에 글자를 넣으려 하지 않는다.** 한글은 깨진다. 자막은 6단계에서 넣는다.
 - 나레이션도 Higgsfield에 시키지 않는다. 한국어 TTS는 6단계에서 처리한다.
@@ -131,10 +163,14 @@ python {scripts_dir}/youtube_upload.py upload \
 `{output_dir}/log.jsonl` 에 한 줄 추가한다.
 
 ```json
-{"date":"2026-08-13","plan_id":"...","video_id":"...","shots":12,"duration":27.4,"hook_type":"충격선언","status":"uploaded_private"}
+{"date":"2026-08-13","plan_id":"...","video_id":"...","shots":12,"clips_generated":8,
+ "credits_before":1800,"credits_after":1640,"credits_used":160,
+ "duration":27.4,"hook_type":"충격선언","status":"uploaded_private"}
 ```
 
-`hook_type` 을 남겨야 주간 리뷰에서 "어떤 후킹이 먹혔는가"를 판정할 수 있다.
+- `hook_type` 을 남겨야 주간 리뷰에서 "어떤 후킹이 먹혔는가"를 판정할 수 있다.
+- `credits_used` 를 남겨야 편당 비용이 실측으로 쌓인다. 이 값이 몇 편 모이면
+  `measured_credits_per_video` 를 평균으로 갱신하자고 제안한다.
 
 ## 하지 말 것
 

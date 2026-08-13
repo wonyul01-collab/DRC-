@@ -59,8 +59,27 @@ skills:
       scripts_dir: "~/.hermes/workspace/youtube/scripts"
       # 생성물 저장 위치
       output_dir: "~/.hermes/workspace/youtube/out"
-      # 하루 최대 생성 편수. 크레딧 폭주 방지용 하드 캡.
-      daily_video_cap: 3
+      # ---- 크레딧 가드 --------------------------------------------------
+      # 편수 상한만으로는 크레딧을 못 지킵니다. 쇼츠 1편은 생성 1회가 아니라
+      # 컷 여러 개를 뽑기 때문입니다. 최악의 경우(20컷 x 45cr) 하루 2편이면
+      # 월 1,800 크레딧을 하루에 다 씁니다. 그래서 세 겹으로 막습니다.
+
+      # 1) 하루 최대 편수 — 폭주 루프 차단
+      daily_video_cap: 2
+
+      # 2) 편당 최대 생성 클립 수 — 이게 실질적인 비용 통제선입니다.
+      #    컷이 20개여도 클립 8개를 나눠 쓰면 됩니다.
+      #    compose_short.py 는 같은 클립을 여러 shot 이 참조해도 정상 동작합니다.
+      max_clips_per_video: 8
+
+      # 3) 잔량 바닥 — balance 가 이 아래면 생성하지 않고 중단합니다.
+      #    실측 전에는 편당 비용을 모르니 한 편치 여유를 남겨둡니다.
+      min_credit_floor: 200
+
+      # 첫 영상은 "측정용"으로 취급합니다. 클립 3~4개짜리로 짧게 만들고
+      # transactions 로 실제 차감을 확인한 뒤, 위 값들을 실측에 맞춰 조정하세요.
+      measured_credits_per_video: null   # 실측 후 숫자를 적으세요
+
       # 업로드 기본 공개 상태. 반드시 private 로 시작하세요 (사람 검수 후 공개).
       default_privacy: "private"
 
