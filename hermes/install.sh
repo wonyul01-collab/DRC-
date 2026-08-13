@@ -40,14 +40,27 @@ mkdir -p "$WORKSPACE/out"/{plans,scripts,video/raw,desc,reviews}
 mkdir -p "$HERMES_HOME/secrets"
 chmod 700 "$HERMES_HOME/secrets"
 
-for f in channel-brief reference-style; do
-  if [ ! -f "$WORKSPACE/$f.yaml" ]; then
-    cp "$SRC/content/$f.example.yaml" "$WORKSPACE/$f.yaml"
-    echo "    템플릿 생성: $WORKSPACE/$f.yaml"
+if [ ! -f "$WORKSPACE/channel-brief.yaml" ]; then
+  cp "$SRC/content/channel-brief.example.yaml" "$WORKSPACE/channel-brief.yaml"
+  echo "    템플릿 생성: $WORKSPACE/channel-brief.yaml"
+else
+  echo "    이미 있음, 건드리지 않음: channel-brief.yaml"
+fi
+
+# 벤치마크 스타일. STYLE 환경변수로 다른 채널 스타일을 고를 수 있습니다.
+#   STYLE=other-channel bash install.sh
+STYLE="${STYLE:-jinjja-jamkkanman}"
+if [ ! -f "$WORKSPACE/reference-style.yaml" ]; then
+  if [ -f "$SRC/content/styles/$STYLE.yaml" ]; then
+    cp "$SRC/content/styles/$STYLE.yaml" "$WORKSPACE/reference-style.yaml"
+    echo "    스타일 적용: $STYLE → $WORKSPACE/reference-style.yaml"
   else
-    echo "    이미 있음, 건드리지 않음: $f.yaml"
+    cp "$SRC/content/reference-style.example.yaml" "$WORKSPACE/reference-style.yaml"
+    echo "    빈 템플릿 생성 ($STYLE 없음): $WORKSPACE/reference-style.yaml"
   fi
-done
+else
+  echo "    이미 있음, 건드리지 않음: reference-style.yaml"
+fi
 
 echo "==> Python 의존성 설치"
 # 실패해도 설치를 중단하지 않습니다. 아래 안내는 여전히 유효하고,
