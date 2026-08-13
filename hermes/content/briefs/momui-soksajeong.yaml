@@ -17,6 +17,7 @@ stage: "practice"
 channel:
   name: "몸의 속사정"
   url: "https://www.youtube.com/@몸의속사정"
+  channel_id: "UCquJ4vugjON-2t5Clp569fQ"   # 성과 분석에 쓰입니다
   language: "ko"
   positioning: >
     걷고 앉고 돌아눕는 일상의 동작에서 몸 안에 무슨 일이 벌어지는지,

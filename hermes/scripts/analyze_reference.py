@@ -168,13 +168,15 @@ def cmd_setup() -> None:
         print("\n편집기를 자동으로 열지 못했습니다. 위 경로의 파일을 직접 여세요.")
 
 
-def api_get(endpoint: str, params: dict, key: str) -> dict:
+def api_get(endpoint: str, params: dict, key: str, allow_404: bool = False) -> dict:
     params = {**params, "key": key}
     url = f"{API}/{endpoint}?{urllib.parse.urlencode(params)}"
     try:
         with urllib.request.urlopen(url, timeout=30) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
+        if exc.code == 404 and allow_404:
+            return {}
         body = exc.read().decode(errors="replace")
         sys.exit(f"API 오류 {exc.code} ({endpoint}):\n{body[:800]}")
     except urllib.error.URLError as exc:
@@ -213,7 +215,11 @@ def fetch_video_ids(uploads_playlist: str, key: str, limit: int) -> list[str]:
                   "maxResults": 50}
         if token:
             params["pageToken"] = token
-        data = api_get("playlistItems", params, key)
+        # 영상이 0개인 채널은 uploads 재생목록이 아직 만들어지지 않아 404 가 납니다.
+        # 오류가 아니라 "아직 영상이 없다" 는 뜻이므로 빈 결과로 처리합니다.
+        data = api_get("playlistItems", params, key, allow_404=True)
+        if not data:
+            break
         for item in data.get("items", []):
             vid = item.get("contentDetails", {}).get("videoId")
             if vid:
@@ -377,10 +383,28 @@ def main() -> None:
     key = load_api_key(args.key_file)
 
     channel = resolve_channel(args.handle, key)
-    uploads = channel["contentDetails"]["relatedPlaylists"]["uploads"]
-    ids = fetch_video_ids(uploads, key, args.max)
+    stats = channel.get("statistics", {})
+    snippet = channel.get("snippet", {})
+
+    uploads = (channel.get("contentDetails", {})
+                      .get("relatedPlaylists", {})
+                      .get("uploads"))
+    ids = fetch_video_ids(uploads, key, args.max) if uploads else []
+
     if not ids:
-        sys.exit("영상을 가져오지 못했습니다. 채널이 비공개이거나 업로드가 없습니다.")
+        # 방금 만든 내 채널을 조회한 경우가 대부분입니다. 오류로 취급하지 않습니다.
+        print(json.dumps({
+            "channel": {
+                "title": snippet.get("title", ""),
+                "handle": snippet.get("customUrl", ""),
+                "channel_id": channel.get("id", ""),
+                "subscribers": int(stats.get("subscriberCount", 0)),
+                "total_videos": int(stats.get("videoCount", 0)),
+            },
+            "note": "영상이 없어 분석할 표본이 없습니다. "
+                    "새로 만든 채널이라면 정상입니다. 채널ID를 기록해 두세요.",
+        }, ensure_ascii=False, indent=2))
+        return
     videos = fetch_videos(ids, key)
     summary = summarize(channel, videos)
 
