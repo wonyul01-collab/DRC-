@@ -35,6 +35,10 @@ skills:
     yt-shorts-factory:
       # 채널 브리프 경로 (content/channel-brief.example.yaml 를 복사해서 작성)
       brief_path: "~/.hermes/workspace/youtube/channel-brief.yaml"
+      # 벤치마크 채널의 문법 (yt-style-extract 가 만들어 줍니다)
+      style_path: "~/.hermes/workspace/youtube/reference-style.yaml"
+      # 파이썬 스크립트 위치
+      scripts_dir: "~/.hermes/workspace/youtube/scripts"
       # 생성물 저장 위치
       output_dir: "~/.hermes/workspace/youtube/out"
       # 하루 최대 생성 편수. 크레딧 폭주 방지용 하드 캡.

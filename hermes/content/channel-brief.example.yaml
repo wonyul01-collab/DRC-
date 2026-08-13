@@ -1,13 +1,16 @@
 # 채널 브리프 — 모든 스킬이 이 파일을 기준으로 판단합니다.
 # ~/.hermes/workspace/youtube/channel-brief.yaml 로 복사해서 채우세요.
-# 여기가 비어 있으면 에이전트가 방향 없이 아무 영상이나 만듭니다. 가장 중요한 파일입니다.
+#
+# 지금 단계(쇼츠 제작 연습)에서는 channel / audience / benchmark / format 만 채우면 됩니다.
+# products 와 funnel 은 판매를 시작할 때 채우세요. 비어 있어도 파이프라인은 돕니다.
+
+stage: "practice"                # practice(제작 연습) | growth(구독자 확보) | monetize(판매)
 
 channel:
   name: ""                       # 채널명
-  url: ""                        # 채널 URL (생기면)
+  url: ""
   language: "ko"
   # 한 문장으로. "누구에게 무엇을 주는 채널인가."
-  # 예: "엑셀을 매일 쓰지만 배운 적 없는 5~10년차 직장인에게, 오늘 바로 쓸 손기술을 준다."
   positioning: ""
 
 audience:
@@ -15,21 +18,13 @@ audience:
   pain: ""                       # 이 사람이 실제로 겪는 불편 하나
   where: ""                      # 이 사람이 모여 있는 커뮤니티/검색어
 
-# 이 채널이 파는 것. 이게 없으면 조회수가 나도 돈이 안 됩니다.
-# 광고 수익(YPP)은 요건 충족까지 시간이 걸리므로, 상품을 먼저 정하는 쪽이 빠릅니다.
-products:
-  - name: ""                     # 예: "엑셀 함수 치트시트 PDF"
-    type: ""                     # lead_magnet | digital_product | service | affiliate
-    price: ""                    # 무료면 "0"
-    link: ""                     # 영상 설명란에 넣을 URL
-    # 어떤 영상 뒤에 이 상품을 붙이는 게 자연스러운가
-    fits_content: ""
-
-funnel:
-  # 영상 → 어디로 → 어디로. 각 단계 URL을 적어두면 주간 리뷰에서 새는 지점을 찾습니다.
-  step1_cta: ""                  # 영상 마지막 한 문장
-  step2_landing: ""              # 랜딩/오픈채팅/뉴스레터 URL
-  step3_conversion: ""           # 결제/신청 URL
+# 벤치마킹하는 채널. 상세 문법은 reference-style.yaml 에 따로 있습니다.
+benchmark:
+  channel_name: ""               # 예: "진짜 잠깐만"
+  why: ""                        # 이 채널의 무엇을 배우려는가
+  # 배울 것과 배우지 않을 것을 나눠 적어둡니다.
+  learn: []                      # 예: ["후킹 문장 구조", "컷 리듬", "자막 스타일"]
+  avoid: []                      # 예: ["같은 소재", "같은 대본", "비슷한 채널명"]
 
 format:
   type: "shorts"                 # shorts | long | both
@@ -46,8 +41,22 @@ cadence:
   videos_per_week: 5
   review_day: "월요일"
 
+# ---- 판매 단계에서 채우는 것 (지금은 비워둬도 됩니다) ----------------------
+products: []
+  # - name: ""                   # 예: "엑셀 함수 치트시트 PDF"
+  #   type: ""                   # lead_magnet | digital_product | service | affiliate
+  #   price: ""
+  #   link: ""
+  #   fits_content: ""
+
+funnel:
+  step1_cta: ""                  # 영상 마지막 한 문장. 판매 전에는 "구독" 정도로 둡니다.
+  step2_landing: ""
+  step3_conversion: ""
+
 # 절대 다루지 않을 것. 에이전트가 여기 걸리는 소재를 제안하면 스스로 버립니다.
 guardrails:
   banned_topics: []              # 예: ["정치", "특정 종목 매수 추천"]
   claims_policy: "단정적 효능·수익 보장 표현 금지. 수치 인용 시 출처 명시."
   likeness_policy: "실존 인물의 얼굴·목소리 재현 금지."
+  originality_policy: "벤치마크 채널의 대본·클립·로고 복제 금지. 포맷만 참고."

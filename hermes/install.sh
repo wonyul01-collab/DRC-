@@ -36,16 +36,18 @@ mkdir -p "$WORKSPACE/scripts"
 cp "$SRC"/scripts/*.py "$SRC"/scripts/requirements.txt "$WORKSPACE/scripts/"
 
 echo "==> 작업 폴더 생성"
-mkdir -p "$WORKSPACE/out"/{plans,scripts,video,desc,reviews}
+mkdir -p "$WORKSPACE/out"/{plans,scripts,video/raw,desc,reviews}
 mkdir -p "$HERMES_HOME/secrets"
 chmod 700 "$HERMES_HOME/secrets"
 
-if [ ! -f "$WORKSPACE/channel-brief.yaml" ]; then
-  cp "$SRC/content/channel-brief.example.yaml" "$WORKSPACE/channel-brief.yaml"
-  echo "    채널 브리프 템플릿 생성: $WORKSPACE/channel-brief.yaml"
-else
-  echo "    채널 브리프 이미 있음, 건드리지 않음"
-fi
+for f in channel-brief reference-style; do
+  if [ ! -f "$WORKSPACE/$f.yaml" ]; then
+    cp "$SRC/content/$f.example.yaml" "$WORKSPACE/$f.yaml"
+    echo "    템플릿 생성: $WORKSPACE/$f.yaml"
+  else
+    echo "    이미 있음, 건드리지 않음: $f.yaml"
+  fi
+done
 
 echo "==> Python 의존성 설치"
 # 실패해도 설치를 중단하지 않습니다. 아래 안내는 여전히 유효하고,
@@ -59,6 +61,22 @@ install_deps() {
 if ! install_deps; then
   echo "    경고: 자동 설치 실패. 직접 실행하세요:" >&2
   echo "      pip install -r $WORKSPACE/scripts/requirements.txt" >&2
+fi
+
+echo "==> 영상 합성 도구 확인"
+if command -v ffmpeg >/dev/null 2>&1; then
+  echo "    ffmpeg OK"
+else
+  echo "    경고: ffmpeg 가 없습니다. 자막·나레이션 합성이 안 됩니다." >&2
+  echo "      Ubuntu/WSL: sudo apt install ffmpeg" >&2
+  echo "      macOS:      brew install ffmpeg" >&2
+fi
+if fc-list :lang=ko 2>/dev/null | grep -qi -e "noto sans" -e pretendard -e nanum; then
+  echo "    한글 폰트 OK"
+else
+  echo "    경고: 자막용 한글 폰트가 안 보입니다. 자막이 네모로 깨질 수 있습니다." >&2
+  echo "      Ubuntu/WSL: sudo apt install fonts-noto-cjk" >&2
+  echo "      설치 후 확인: fc-list :lang=ko family | sort -u" >&2
 fi
 
 cat <<EOF
@@ -77,8 +95,15 @@ cat <<EOF
        # $HERMES_HOME/secrets/youtube_client_secret.json 로 저장한 뒤:
        python $WORKSPACE/scripts/youtube_upload.py auth
 
-  4. 채널 브리프 작성 (가장 중요)
+  4. 채널 브리프 작성
        \$EDITOR $WORKSPACE/channel-brief.yaml
 
-  5. 예약 작업 등록: hermes/cron/jobs.md 참고
+  5. 벤치마크 채널 문법 심기 (가장 중요)
+       hermes
+       > /yt-style-extract <분석 노트가 있는 경로> 를 읽고 스타일 파일을 채워줘
+
+  6. 합성 도구 점검
+       python $WORKSPACE/scripts/compose_short.py check
+
+  7. 예약 작업 등록: hermes/cron/jobs.md 참고
 EOF
