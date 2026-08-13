@@ -21,6 +21,18 @@ description: 참고 채널 분석 자료(옵시디언 노트, NotebookLM 정리�
 
 ## 절차
 
+0. **실측 먼저** — 채널 핸들을 알고 `YOUTUBE_API_KEY` 가 있으면, 노트를 읽기 전에
+   실제 숫자부터 받아온다. 사람이 쓴 노트는 인상이고, 이건 실측이다.
+
+   ```bash
+   python {scripts_dir}/analyze_reference.py --handle "@채널핸들" --max 200 --calibrate
+   ```
+
+   나오는 값 중 `structure.total_seconds`, `hooking.types` 의 빈도,
+   `cadence.videos_per_week` 는 노트의 추정값보다 이쪽을 우선한다.
+   충돌하면 **실측을 쓰고, 노트와 다르다는 사실을 보고한다.**
+   키가 없으면 이 단계를 건너뛰고 노트만으로 진행하되, 어떤 값이 추정치인지 표시한다.
+
 1. **훑기** — 자료 전체를 먼저 읽고, 반복되는 패턴이 무엇인지 목록으로 뽑는다.
    한두 편에만 나온 건 패턴이 아니다. 최소 3편 이상에서 반복돼야 스타일로 인정한다.
 

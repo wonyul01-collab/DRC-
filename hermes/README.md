@@ -34,11 +34,14 @@ hermes/
 │   └── yt-growth-review/           # 성과 분석 → 다음 주 방향
 ├── scripts/
 │   ├── compose_short.py            # TTS + 한글 자막 + 컷 합성  ★핵심
+│   ├── analyze_reference.py        # 벤치마크 채널 실측 (YouTube API)
 │   ├── youtube_upload.py           # 업로드 (AI 콘텐츠 공시 포함)
 │   └── youtube_analytics.py        # 성과 조회
 ├── content/
 │   ├── channel-brief.example.yaml  # 내 채널 정의
-│   └── reference-style.example.yaml # 벤치마크 채널의 문법  ★핵심
+│   ├── reference-style.example.yaml # 벤치마크 문법 빈 템플릿
+│   └── styles/
+│       └── jinjja-jamkkanman.yaml  # "진짜 잠깐만" 분석 결과  ★핵심
 └── cron/jobs.md                    # 예약 작업 등록 명령
 ```
 
@@ -62,6 +65,7 @@ hermes/
 | Hermes Agent | 설치 완료 (`~/.hermes` 존재) | 무료 |
 | LLM | Anthropic / OpenRouter / Gemini 중 하나 | 사용량 과금 |
 | Higgsfield | **유료 구독 필수** (MCP는 구독자만) | 월 $15~ (크레딧제) |
+| YouTube API 키 | 벤치마크 채널 실측 (읽기 전용, OAuth와 별개) | 무료 |
 | ffmpeg | 자막·오디오 합성 | 무료 |
 | 한글 폰트 | 자막 렌더링 (Noto Sans KR 등) | 무료 |
 | edge-tts | 한국어 나레이션 | 무료 |
