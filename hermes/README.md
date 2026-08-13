@@ -90,7 +90,10 @@ powershell -ExecutionPolicy Bypass -File hermes\install.ps1   # 네이티브 Win
 
 1. **config 병합** — `config.snippet.yaml` 의 `mcp_servers` / `skills.config` / `cron` 을
    `~/.hermes/config.yaml` 의 같은 최상위 키에 합칩니다.
-2. **Higgsfield 연결** — `hermes mcp login higgsfield` → `hermes tools` 로 확인
+2. **Higgsfield 연결** — `hermes mcp login higgsfield`.
+   `Authenticated — N tool(s) available` 이 뜨면 성공입니다.
+   ⚠ `hermes tools` / `hermes mcp configure` 로 확인하지 마세요 —
+   조회가 아니라 **대화형 선택 UI** 라서 설정이 덮어써집니다 ([WINDOWS.md](WINDOWS.md#주의-확인용으로-쓰면-안-되는-명령))
 3. **YouTube 연결** — 데스크톱 OAuth JSON을 `~/.hermes/secrets/youtube_client_secret.json` 에 두고
    `python ~/.hermes/workspace/youtube/scripts/youtube_upload.py auth`
 4. **채널 브리프 작성** — `~/.hermes/workspace/youtube/channel-brief.yaml`

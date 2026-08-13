@@ -185,11 +185,39 @@ Hermes의 `config.yaml` 같은 최상위 키에 **합칩니다.** 파일 전체�
 
 ```bash
 hermes mcp login higgsfield
-hermes tools                    # 툴이 실제로 등록됐는지 확인
 ```
 
-`generate_*` 계열 툴이 목록에 보이면 성공입니다.
-안 보이면 `hermes mcp configure higgsfield` 로 툴 선택을 확인하세요.
+브라우저에 구글 로그인 창이 뜹니다. 끝나면 터미널에
+`✓ Authenticated — N tool(s) available` 이 찍힙니다. **그게 확인입니다.**
+숫자가 나오면 구독도 살아 있다는 뜻입니다.
+
+### ⚠ 주의: 확인용으로 쓰면 안 되는 명령
+
+| 명령 | 실제 동작 |
+|---|---|
+| `hermes tools` | 조회가 아니라 **대화형 툴셋 선택 UI** |
+| `hermes mcp configure <name>` | **대화형 툴 선택 체크리스트** |
+| `hermes mcp` (인자 없이) | **대화형 카탈로그 피커** |
+
+이름만 보면 조회 명령 같지만 전부 사람이 방향키로 고르는 화면입니다.
+공식 문서에도 `hermes tools — Configure enabled tools` 로 적혀 있습니다.
+
+**에이전트·스크립트·백그라운드처럼 stdin 이 없는 곳에서 실행하면 위험합니다.**
+메뉴가 무한 재출력되다가 선택 결과가 `config.yaml` 에 써지고,
+`platform_toolsets.cli` 같은 값이 통째로 덮어써집니다. 그러면 화이트리스트
+게이팅에 걸려 방금 붙인 MCP 툴이 오히려 전부 차단됩니다.
+
+**툴 이름을 알고 싶으면 Hermes 대화창에서 에이전트에게 물어보세요:**
+
+```
+지금 쓸 수 있는 higgsfield 툴 이름을 전부 나열해줘
+```
+
+에이전트는 자기 툴 목록을 이미 갖고 있어서 바로 답합니다.
+설정 파일을 건드리지 않는 유일하게 안전한 확인 방법입니다.
+
+> 사고가 났다면 `config.yaml.bak-*` 백업이 같은 폴더에 있습니다.
+> `platform_toolsets.cli` 를 원래 값(보통 `['hermes-cli']`)으로 되돌리면 복구됩니다.
 
 ### 3. YouTube 인증 (업로드용)
 

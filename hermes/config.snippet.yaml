@@ -3,7 +3,13 @@
 # 사용법: 아래 블록들을 기존 ~/.hermes/config.yaml 의
 #         같은 이름 최상위 키에 "병합" 하세요. 파일 전체를 덮어쓰지 마세요.
 #         비밀값(API 키/토큰)은 config.yaml 이 아니라 ~/.hermes/.env 에 둡니다.
-# 적용 후: hermes mcp login higgsfield  →  hermes tools  로 등록 확인
+# 적용 후: hermes mcp login higgsfield
+#
+# ⚠ `hermes tools` 와 `hermes mcp configure` 를 확인용으로 쓰지 마세요.
+#   둘 다 조회 명령이 아니라 대화형 선택 UI 입니다. 에이전트·스크립트·백그라운드
+#   처럼 stdin 이 없는 곳에서 실행하면 선택 결과가 config.yaml 에 써져서
+#   platform_toolsets 같은 값이 통째로 덮어써집니다. 실제로 그 사고가 났습니다.
+#   등록 확인은 login 출력의 "Authenticated — N tool(s) available" 로 하세요.
 
 mcp_servers:
   # Higgsfield 공식 호스티드 MCP (영상/이미지 생성)
@@ -21,7 +27,8 @@ mcp_servers:
     supports_parallel_tool_calls: false
     tools:
       # 생성 계열만 노출해서 에이전트가 엉뚱한 툴을 쓰지 않게 제한합니다.
-      # 실제 노출 툴 이름은 `hermes mcp configure higgsfield` 로 먼저 확인 후 조정하세요.
+      # 실제 툴 이름은 Hermes 대화창에서 에이전트에게 물어보면 됩니다
+      # ("지금 쓸 수 있는 higgsfield 툴 이름을 나열해줘"). CLI 로 확인하려 들지 마세요.
       include:
         - "generate_*"
         - "get_*"

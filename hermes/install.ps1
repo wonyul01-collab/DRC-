@@ -112,7 +112,9 @@ if (Test-Path $MalgunPath) {
 
   2. Higgsfield 인증 (구글 로그인 창이 브라우저에 뜹니다)
        hermes mcp login higgsfield
-       hermes tools
+       # "Authenticated - N tool(s) available" 이 뜨면 성공입니다.
+       # 주의: hermes tools / hermes mcp configure 는 조회가 아니라 대화형
+       #       선택 UI 입니다. 확인 목적으로 실행하면 config.yaml 이 덮어써집니다.
 
   3. YouTube 인증
        # 데스크톱 앱 OAuth JSON 을 $HermesHome\secrets\youtube_client_secret.json 로 저장 후:

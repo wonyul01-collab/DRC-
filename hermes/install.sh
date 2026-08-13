@@ -101,7 +101,9 @@ cat <<EOF
 
   2. Higgsfield 인증
        hermes mcp login higgsfield
-       hermes tools            # 툴이 등록됐는지 확인
+       # "Authenticated - N tool(s) available" 이 뜨면 성공입니다.
+       # ⚠ hermes tools / hermes mcp configure 로 확인하려 하지 마세요.
+       #   조회 명령이 아니라 대화형 선택 UI 라서 config.yaml 이 덮어써집니다.
 
   3. YouTube 인증
        # Google Cloud Console에서 데스크톱 앱 OAuth 클라이언트 JSON을 받아
