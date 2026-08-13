@@ -27,6 +27,8 @@ shotlist.json 형식:
   - note 는 보조 자막입니다. 출처·기준값·다음 편 예고처럼 본문을 방해하지 않고
     작게 깔아야 하는 것에 씁니다. 쪼개지 않고 그 shot 전체에 한 줄로 표시됩니다.
     크기·색·위치는 스타일 파일의 subtitle.secondary 에서 조정합니다.
+  - clip 에 "@black" 을 쓰면 검은 화면을 스크립트가 직접 만듭니다. 생성 크레딧이
+    들지 않습니다. 절단마공 엔딩의 블랙아웃에 씁니다. "@color:0x101820" 도 됩니다.
   - voice.provider 가 none 이면 각 shot 에 "duration"(초)이 있어야 합니다.
   - narration 이 빈 문자열이면 그 shot 은 무음으로 처리하고 duration 을 씁니다.
 """
@@ -277,7 +279,10 @@ SECONDARY_DEFAULTS = {
     "shadow": 0,
     "bold": False,
     "alignment": 2,                  # 하단 중앙
-    "margin_vertical": 210,          # 본 자막(기본 320)보다 아래
+    # 쇼츠 UI(채널명·설명·버튼)가 화면 하단 약 200px 을 덮습니다.
+    # 그 위에 놓되 본 자막(기본 320)과는 겹치지 않는 자리가 250 입니다.
+    # 시청자가 55~75세면 이보다 더 작게 내리지 마세요. 안 보입니다.
+    "margin_vertical": 250,
 }
 PRIMARY_DEFAULTS = {
     "font_size": 72,
@@ -334,6 +339,33 @@ def escape_for_filter(path: Path) -> str:
 # --------------------------------------------------------------------------
 # 빌드
 # --------------------------------------------------------------------------
+
+def make_filler(spec: str, work: Path, idx: int, fps: int) -> Path:
+    """생성 클립이 아닌 단색 화면을 만든다. 크레딧이 들지 않는다.
+
+    spec:
+      "@black"            검은 화면 (절단마공 엔딩의 블랙아웃)
+      "@color:0x101820"   지정한 색 화면
+    """
+    if spec == "@black":
+        color = "black"
+    elif spec.startswith("@color:"):
+        color = spec.split(":", 1)[1].strip() or "black"
+    else:
+        sys.exit(f"알 수 없는 클립 지정자: {spec}\n"
+                 '쓸 수 있는 값: "@black", "@color:0xRRGGBB"')
+
+    out = work / f"filler{idx:03d}.mp4"
+    run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "lavfi", "-t", "2",
+        "-i", f"color=c={color}:s={W}x{H}:r={fps}",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
+        "-pix_fmt", "yuv420p",
+        str(out),
+    ])
+    return out
+
 
 def cmd_check(args: argparse.Namespace) -> None:
     ok = True
@@ -402,11 +434,17 @@ def cmd_build(args: argparse.Namespace) -> None:
     timeline = 0.0
 
     for idx, shot in enumerate(shots):
-        clip = Path(shot["clip"])
-        if not clip.is_absolute():
-            clip = base / clip
-        if not clip.is_file():
-            sys.exit(f"클립이 없습니다: {clip}")
+        # "@black" 은 생성 클립이 아니라 스크립트가 만드는 검은 화면입니다.
+        # 절단마공 엔딩의 블랙아웃에 씁니다. Higgsfield 크레딧이 들지 않습니다.
+        raw_clip = str(shot["clip"])
+        if raw_clip.startswith("@"):
+            clip = make_filler(raw_clip, work, idx, fps)
+        else:
+            clip = Path(raw_clip)
+            if not clip.is_absolute():
+                clip = base / clip
+            if not clip.is_file():
+                sys.exit(f"클립이 없습니다: {clip}")
 
         narration = (shot.get("narration") or "").strip()
         audio_path: Path | None = None
