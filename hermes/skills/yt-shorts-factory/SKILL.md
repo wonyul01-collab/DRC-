@@ -138,6 +138,12 @@ description: 기획안을 받아 대본을 쓰고 Higgsfield MCP로 클립을 �
 > 컷 수가 많고 크레딧이 부담되면, 클립 하나를 여러 shot 이 나눠 쓰게 해도 된다.
 > `compose_short.py` 는 같은 클립을 여러 shot 에서 참조해도 정상 동작한다.
 
+**shot 길이는 클립 길이의 2배를 넘기지 않는다.** 생성 클립은 5초 안팎이다.
+`compose_short.py` 는 2배까지는 재생을 늦춰 자연스럽게 채우지만, 그 이상이면
+루프해서 이어지는 지점이 튄다. 출력 JSON 의 `clip_fit` 에 shot 별로
+`slowed` / `trimmed` / `looped` 가 찍히니 확인한다. **`looped` 가 있으면
+대본을 나눠 shot 을 쪼개거나 그 구간용 클립을 하나 더 만든다.**
+
 ### 5. 합성 — 나레이션 + 자막
 
 ```bash

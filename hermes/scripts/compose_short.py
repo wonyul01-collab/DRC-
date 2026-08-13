@@ -431,6 +431,7 @@ def cmd_build(args: argparse.Namespace) -> None:
     seg_videos: list[Path] = []
     seg_audios: list[Path] = []
     cues: list[tuple[float, float, str, str]] = []
+    fit_log: list[dict] = []
     timeline = 0.0
 
     for idx, shot in enumerate(shots):
@@ -464,20 +465,41 @@ def cmd_build(args: argparse.Namespace) -> None:
                 sys.exit(f"shot {idx}: 나레이션이 없으면 duration(초)이 필요합니다.")
             duration = float(shot["duration"])
 
-        # 2) 영상 세그먼트 — 세로로 채우고 길이를 맞춘다 (짧으면 루프)
+        # 2) 영상 세그먼트 — 세로로 채우고 길이를 맞춘다.
+        #    생성 클립(보통 5초 안팎)이 shot 보다 짧을 때 그냥 루프시키면
+        #    이어지는 지점에서 화면이 튄다. 조금 모자란 정도면 재생을 늦춰서
+        #    이어붙이는 쪽이 훨씬 자연스럽다. 많이 모자라면 그때 루프한다.
+        clip_len = probe_duration(clip)
+        stretch = duration / clip_len if clip_len > 0 else 1.0
+        max_stretch = float(visual_cfg.get("max_slowdown", 2.0))
+
+        common_vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+                     f"crop={W}:{H},setsar=1,fps={fps}")
         seg_v = work / f"v{idx:03d}.mp4"
-        run([
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-stream_loop", "-1", "-i", str(clip),
-            "-t", f"{duration:.3f}",
-            "-an",
-            "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,"
-                   f"crop={W}:{H},setsar=1,fps={fps}",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-            "-pix_fmt", "yuv420p",
-            str(seg_v),
-        ])
+
+        if 1.0 < stretch <= max_stretch:
+            # setpts 로 늘린다. 오디오는 별도 트랙이라 영향이 없다.
+            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(clip),
+                   "-vf", f"setpts=PTS*{stretch:.6f},{common_vf}"]
+            fitted = "slowed"
+        else:
+            cmd = ["ffmpeg", "-y", "-loglevel", "error",
+                   "-stream_loop", "-1", "-i", str(clip), "-vf", common_vf]
+            fitted = "looped" if stretch > 1.0 else "trimmed"
+
+        run([*cmd, "-t", f"{duration:.3f}", "-an",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+             "-pix_fmt", "yuv420p", str(seg_v)])
         seg_videos.append(seg_v)
+
+        if fitted == "looped":
+            print(f"경고: shot {idx} — 클립 {clip_len:.1f}초를 {duration:.1f}초로 채우려고 "
+                  f"루프했습니다({stretch:.1f}배). 이어지는 지점에서 화면이 튑니다.\n"
+                  f"      대본을 나눠 shot 을 짧게 하거나 클립을 더 길게 생성하세요.",
+                  file=sys.stderr)
+
+        fit_log.append({"shot": idx, "clip_seconds": round(clip_len, 2),
+                        "shot_seconds": round(duration, 2), "fit": fitted})
 
         # 3) 오디오 세그먼트 — 없으면 무음으로 채워서 길이를 맞춘다
         seg_a = work / f"s{idx:03d}.m4a"
@@ -558,6 +580,7 @@ def cmd_build(args: argparse.Namespace) -> None:
         "shots": len(shots),
         "subtitle_cues": sum(1 for c in cues if c[3] == "Default"),
         "note_cues": sum(1 for c in cues if c[3] == "Note"),
+        "clip_fit": fit_log,
         "narration": "none" if silent else voice_cfg.get("name", ""),
     }
     if timeline > 60:
