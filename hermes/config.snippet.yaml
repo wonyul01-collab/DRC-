@@ -21,7 +21,11 @@ mcp_servers:
     auth: oauth
     enabled: true
     # 영상 렌더링은 오래 걸립니다. 기본 타임아웃으로는 자주 끊깁니다.
-    timeout: 900
+    # 실측: 클립 1개당 약 4분, 4개 순차 생성에 16분 이상.
+    # jobs_wait 는 보통 이 안에서 끊고 재호출하는 구조라 900 으로도 버티지만,
+    # 모델·혼잡도에 따라 단일 호출이 15분을 넘길 수 있어 여유를 뒀습니다.
+    # 여기서 끊기면 크레딧은 이미 나간 뒤라 손해가 큽니다.
+    timeout: 1800
     connect_timeout: 30
     # 크레딧 낭비를 막기 위해 동시 호출을 끕니다.
     supports_parallel_tool_calls: false
