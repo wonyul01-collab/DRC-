@@ -59,11 +59,20 @@ bash hermes/install.sh
 
 ### A-3. 자막 폰트 설정
 
-`~/.hermes/workspace/youtube/reference-style.yaml` 에서:
+기본값은 **Pretendard** 입니다. 없으면 [배포 페이지](https://github.com/orioncactus/pretendard/releases)
+에서 받아 설치하시면 Windows·WSL 양쪽에서 다 잡힙니다.
+
+설치된 이름을 먼저 확인하세요:
+
+```bash
+fc-list :lang=ko family | tr ',' '\n' | sort -u
+```
+
+그 목록에 있는 이름을 `~/.hermes/workspace/youtube/reference-style.yaml` 에 넣습니다:
 
 ```yaml
 subtitle:
-  font_family: "Noto Sans CJK KR"     # WSL2 기본
+  font_family: "Pretendard"           # 권장
 ```
 
 Windows의 맑은 고딕을 그대로 쓰고 싶으면 (WSL에서 접근 가능합니다):
@@ -74,8 +83,13 @@ subtitle:
   font_file: "/mnt/c/Windows/Fonts/malgun.ttf"
 ```
 
-`compose_short.py` 가 실행 전에 폰트 존재를 확인해서 경고를 띄웁니다.
-경고가 뜨면 자막이 기본 폰트로 나오니 반드시 고치세요.
+> **`Noto Sans CJK KR` 은 피하세요.** 배포판에 따라 `Black / Bold / Light / Medium / Regular`
+> 만 등록되고 **굵기 없는 순수 패밀리명이 없는** 경우가 있습니다. 그러면 libass 가
+> 매칭에 실패하는데, **에러를 내지 않고 조용히 기본 폰트로 떨어집니다.**
+> 영상을 눈으로 볼 때까지 모릅니다.
+
+`compose_short.py` 가 실행 전에 폰트 존재를 확인해 경고를 띄웁니다.
+경고가 뜨면 반드시 고치고 진행하세요.
 
 ### A-4. 브라우저 인증 (WSL2의 유일한 함정)
 
@@ -107,11 +121,13 @@ winget install --id Gyan.FFmpeg
 powershell -ExecutionPolicy Bypass -File hermes\install.ps1
 ```
 
-자막 폰트는 Windows 기본 맑은 고딕을 씁니다:
+자막 폰트는 **Pretendard** 를 권장합니다
+([설치](https://github.com/orioncactus/pretendard/releases)). 설치가 번거로우면
+Windows 기본 맑은 고딕도 됩니다:
 
 ```yaml
 subtitle:
-  font_family: "Malgun Gothic"
+  font_family: "Pretendard"      # 또는 "Malgun Gothic"
 ```
 
 > `install.ps1` 은 이 개발 환경에 PowerShell이 없어 **실행 검증을 못 했습니다.**

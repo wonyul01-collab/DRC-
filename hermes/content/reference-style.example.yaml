@@ -54,7 +54,10 @@ structure:
 # 3. 자막 — compose_short.py 가 그대로 읽어서 렌더링한다
 # ---------------------------------------------------------------
 subtitle:
-  font_family: "Noto Sans KR"   # 시스템에 설치된 실제 폰트명이어야 한다
+  # 시스템에 설치된 실제 패밀리명과 정확히 일치해야 한다. 틀리면 에러 없이
+  # 기본 폰트로 떨어진다. 확인: fc-list :lang=ko family | tr ',' '\n' | sort -u
+  # Pretendard 권장. "Noto Sans CJK KR" 은 굵기 없는 순수명이 없는 배포판이 있어 위험.
+  font_family: "Pretendard"
   font_file: ""                 # 폰트 파일 절대경로 (지정하면 이쪽이 우선)
   font_size: 72                 # 1080x1920 기준
   bold: true

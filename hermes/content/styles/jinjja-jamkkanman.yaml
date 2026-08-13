@@ -139,12 +139,22 @@ structure:
 # 3. 자막 — compose_short.py 가 그대로 읽는다
 # ---------------------------------------------------------------
 subtitle:
-  # ★ 시스템에 실제로 설치된 패밀리명이어야 합니다. 다르면 조용히 기본 폰트로 떨어져서
-  #   자막이 밋밋해지거나 네모로 깨집니다. 반드시 확인하세요:
-  #     fc-list :lang=ko family | tr ',' '\n' | sort -u
-  #   Ubuntu/WSL 의 fonts-noto-cjk 는 "Noto Sans CJK KR" 입니다 ("Noto Sans KR" 아님).
-  #   맑은 고딕은 "Malgun Gothic", 프리텐다드는 "Pretendard".
-  font_family: "Noto Sans CJK KR"
+  # ★ 시스템에 실제로 설치된 패밀리명과 정확히 일치해야 합니다.
+  #   틀리면 libass 가 에러를 내지 않고 조용히 기본 폰트로 떨어집니다.
+  #   영상을 눈으로 보기 전까지 모릅니다. compose_short.py 가 미리 경고를 띄웁니다.
+  #
+  #   확인:  fc-list :lang=ko family | tr ',' '\n' | sort -u      (Linux/WSL)
+  #          python compose_short.py check                        (어디서나)
+  #
+  #   Pretendard 를 기본으로 둡니다. 이름이 정확히 하나라 매칭 실패가 없고
+  #   쇼츠 자막용으로 자간·굵기가 좋습니다.  https://github.com/orioncactus/pretendard
+  #
+  #   대체 후보 (설치된 것으로 바꾸세요):
+  #     "Malgun Gothic"      - Windows 기본. 별도 설치 불필요
+  #     "Noto Sans KR"       - 이름이 정확히 일치할 때만
+  #     "Noto Sans CJK KR"   - ⚠ 배포판에 따라 굵기 없는 순수 패밀리명이 없습니다.
+  #                            Black/Bold/Regular 만 등록된 시스템에서는 매칭에 실패합니다.
+  font_family: "Pretendard"
   font_file: ""
   font_size: 78
   bold: true
