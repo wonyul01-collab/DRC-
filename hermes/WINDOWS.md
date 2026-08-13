@@ -183,14 +183,33 @@ python <스크립트경로>/youtube_upload.py auth
 
 ### 4. 벤치마크 채널 분석용 API 키 (읽기 전용)
 
-위 OAuth와 **별개**입니다. 같은 프로젝트에서 사용자 인증 정보 → **API 키**.
+위 OAuth와 **별개**입니다. 같은 프로젝트에서 사용자 인증 정보 → **API 키** →
+API 제한사항에서 `YouTube Data API v3` 하나만 선택.
 
-```bash
-export YOUTUBE_API_KEY="AIza..."          # WSL2
-$env:YOUTUBE_API_KEY = "AIza..."          # PowerShell
+**키는 파일에 한 번만 넣어두면 됩니다.** 명령창에 매번 입력할 필요 없습니다.
 
-python <스크립트경로>/analyze_reference.py --handle "@진짜잠깐만" --calibrate
+```powershell
+python analyze_reference.py --setup
 ```
+
+메모장이 열립니다. 키를 붙여넣고 저장하면 끝입니다. 이후로는 그냥 실행하면 됩니다:
+
+```powershell
+python analyze_reference.py --handle "@진짜잠깐만" --calibrate
+```
+
+키 파일 위치:
+
+| 경로 | 위치 |
+|---|---|
+| 네이티브 Windows | `%LOCALAPPDATA%\hermes\secrets\youtube_api_key.txt` |
+| WSL2 | `~/.hermes/secrets/youtube_api_key.txt` |
+
+메모장이 남기는 BOM·따옴표·`YOUTUBE_API_KEY=` 접두사는 스크립트가 알아서 걷어냅니다.
+`#` 으로 시작하는 줄은 주석으로 무시합니다.
+
+> 이 파일은 `.gitignore` 에 걸려 있어 저장소에 올라가지 않습니다.
+> 환경변수 `YOUTUBE_API_KEY` 를 쓰면 파일보다 우선합니다.
 
 ### 5. 점검
 

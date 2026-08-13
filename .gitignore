@@ -2,6 +2,7 @@
 .env
 *client_secret*.json
 *token*.json
+*api_key*.txt
 secrets/
 
 # 생성물

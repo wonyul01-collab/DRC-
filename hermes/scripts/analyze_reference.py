@@ -22,14 +22,23 @@ import argparse
 import json
 import os
 import re
+import shutil
 import statistics
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 API = "https://www.googleapis.com/youtube/v3"
+
+# API 키를 찾는 순서. 위에서부터 먼저 발견되는 것을 씁니다.
+#   1) --key-file 로 직접 지정한 파일
+#   2) YOUTUBE_API_KEY 환경변수
+#   3) 아래 후보 경로들 (메모장으로 만들어 두면 됩니다)
+KEY_FILENAME = "youtube_api_key.txt"
 
 # 제목에서 후킹 유형을 추정하는 규칙. 분석 노트의 4분류를 그대로 쓴다.
 HOOK_PATTERNS = [
@@ -39,6 +48,121 @@ HOOK_PATTERNS = [
     ("Pain-Point형", r"방법|꿀팁|해결|사기템|이것만|알면|하는\s*법|없애는|펴는"),
     ("충격선언형", r"충격|경악|실화|근황|저지르|수준|실태|폭로|난리|짓"),
 ]
+
+
+def hermes_home() -> Path:
+    """Hermes 설치 위치. 네이티브 Windows 와 그 외를 모두 본다."""
+    env = os.environ.get("HERMES_HOME")
+    if env:
+        return Path(env).expanduser()
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"]) / "hermes"
+    return Path.home() / ".hermes"
+
+
+def key_file_candidates() -> list[Path]:
+    """키 파일을 찾아볼 위치들. 첫 번째가 권장 위치."""
+    here = Path(__file__).resolve().parent
+    return [
+        hermes_home() / "secrets" / KEY_FILENAME,
+        here / KEY_FILENAME,
+        Path.cwd() / KEY_FILENAME,
+    ]
+
+
+def read_key_file(path: Path) -> str | None:
+    """키 파일에서 값을 뽑는다. 메모장이 남기는 BOM·따옴표·주석을 걷어낸다."""
+    try:
+        # utf-8-sig: 메모장이 UTF-8로 저장하면 앞에 BOM이 붙는데 그걸 제거한다.
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        # YOUTUBE_API_KEY=AIza... 형식도 받아준다
+        if "=" in line and line.split("=", 1)[0].strip().upper().endswith("API_KEY"):
+            line = line.split("=", 1)[1].strip()
+        line = line.strip().strip('"').strip("'").strip()
+        if line:
+            return line
+    return None
+
+
+def load_api_key(explicit_file: str | None) -> str:
+    if explicit_file:
+        path = Path(explicit_file).expanduser()
+        key = read_key_file(path)
+        if not key:
+            sys.exit(f"키 파일에서 값을 읽지 못했습니다: {path}")
+        return key
+
+    env_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if env_key:
+        return env_key
+
+    for path in key_file_candidates():
+        key = read_key_file(path)
+        if key:
+            print(f"키 파일 사용: {path}", file=sys.stderr)
+            return key
+
+    listed = "\n".join(f"      {p}" for p in key_file_candidates())
+    sys.exit(
+        "API 키를 찾지 못했습니다.\n\n"
+        "  가장 쉬운 방법 — 키 파일을 만드세요:\n"
+        f"      python {Path(__file__).name} --setup\n\n"
+        "  그러면 메모장이 열립니다. 키를 붙여넣고 저장하면 끝입니다.\n\n"
+        "  아래 위치 중 아무 곳에나 직접 만드셔도 됩니다:\n"
+        f"{listed}\n\n"
+        "  또는 환경변수로:\n"
+        '      PowerShell:  $env:YOUTUBE_API_KEY = "AIza..."\n'
+        '      WSL/Linux :  export YOUTUBE_API_KEY="AIza..."'
+    )
+
+
+def cmd_setup() -> None:
+    """키 파일을 만들고 편집기로 열어준다."""
+    target = key_file_candidates()[0]
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if target.exists() and read_key_file(target):
+        print(f"이미 키가 들어 있습니다: {target}")
+        print("바꾸시려면 그 파일을 직접 여세요.")
+        return
+
+    if not target.exists():
+        target.write_text(
+            "# 이 줄 아래에 YouTube Data API 키를 붙여넣고 저장하세요.\n"
+            "# '#' 으로 시작하는 줄은 무시됩니다. 따옴표는 붙이지 않아도 됩니다.\n"
+            "\n",
+            encoding="utf-8",
+        )
+        try:
+            target.chmod(0o600)          # 소유자만 읽기 (Windows 에서는 무시됨)
+        except OSError:
+            pass
+
+    print(f"키 파일을 만들었습니다:\n    {target}\n")
+    print("여기에 키를 붙여넣고 저장한 뒤, 분석을 다시 실행하세요.")
+
+    opened = False
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(target))    # type: ignore[attr-defined]
+            opened = True
+        elif shutil.which("wslview"):    # WSL2 에서 Windows 기본 앱으로 열기
+            subprocess.Popen(["wslview", str(target)])
+            opened = True
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(target)])
+            opened = True
+    except Exception:
+        opened = False
+
+    if not opened:
+        print("\n편집기를 자동으로 열지 못했습니다. 위 경로의 파일을 직접 여세요.")
 
 
 def api_get(endpoint: str, params: dict, key: str) -> dict:
@@ -231,18 +355,23 @@ def calibration_hints(summary: dict) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="벤치마크 채널 실측 분석")
-    parser.add_argument("--handle", required=True, help='채널 핸들 (예: "@진짜잠깐만")')
+    parser.add_argument("--setup", action="store_true",
+                        help="API 키를 넣을 파일을 만들고 편집기로 연다 (처음 한 번만)")
+    parser.add_argument("--handle", help='채널 핸들 (예: "@진짜잠깐만")')
     parser.add_argument("--max", type=int, default=200, help="분석할 최대 영상 수 (기본 200)")
     parser.add_argument("--out", help="전체 결과를 저장할 JSON 경로")
+    parser.add_argument("--key-file", help="API 키가 든 파일 경로 (직접 지정할 때만)")
     parser.add_argument("--calibrate", action="store_true",
                         help="reference-style.yaml 에 넣을 값 제안까지 출력")
     args = parser.parse_args()
 
-    key = os.environ.get("YOUTUBE_API_KEY")
-    if not key:
-        sys.exit("YOUTUBE_API_KEY 환경변수가 없습니다.\n"
-                 '  export YOUTUBE_API_KEY="AIza..."\n'
-                 "발급: Google Cloud Console → 사용자 인증 정보 → API 키")
+    if args.setup:
+        cmd_setup()
+        return
+    if not args.handle:
+        parser.error('--handle 이 필요합니다. 예: --handle "@진짜잠깐만"')
+
+    key = load_api_key(args.key_file)
 
     channel = resolve_channel(args.handle, key)
     uploads = channel["contentDetails"]["relatedPlaylists"]["uploads"]
