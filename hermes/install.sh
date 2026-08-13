@@ -40,9 +40,17 @@ mkdir -p "$WORKSPACE/out"/{plans,scripts,video/raw,desc,reviews}
 mkdir -p "$HERMES_HOME/secrets"
 chmod 700 "$HERMES_HOME/secrets"
 
+# 채널 브리프. BRIEF 환경변수로 준비된 초안을 고를 수 있습니다.
+#   BRIEF=health-simulation bash install.sh
+# 지정 안 하면 빈 템플릿이 깔립니다.
 if [ ! -f "$WORKSPACE/channel-brief.yaml" ]; then
-  cp "$SRC/content/channel-brief.example.yaml" "$WORKSPACE/channel-brief.yaml"
-  echo "    템플릿 생성: $WORKSPACE/channel-brief.yaml"
+  if [ -n "${BRIEF:-}" ] && [ -f "$SRC/content/briefs/$BRIEF.yaml" ]; then
+    cp "$SRC/content/briefs/$BRIEF.yaml" "$WORKSPACE/channel-brief.yaml"
+    echo "    브리프 적용: $BRIEF → $WORKSPACE/channel-brief.yaml"
+  else
+    cp "$SRC/content/channel-brief.example.yaml" "$WORKSPACE/channel-brief.yaml"
+    echo "    빈 템플릿 생성: $WORKSPACE/channel-brief.yaml"
+  fi
 else
   echo "    이미 있음, 건드리지 않음: channel-brief.yaml"
 fi

@@ -54,10 +54,18 @@ Write-Host "==> 작업 폴더 생성"
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $HermesHome 'secrets') | Out-Null
 
+# 채널 브리프. $env:BRIEF 로 준비된 초안을 고를 수 있습니다.
+#   $env:BRIEF = 'health-simulation'
 $Brief = Join-Path $Workspace 'channel-brief.yaml'
 if (-not (Test-Path $Brief)) {
-    Copy-Item (Join-Path $Src 'content\channel-brief.example.yaml') $Brief
-    Write-Host "    템플릿 생성: $Brief"
+    $BriefSrc = if ($env:BRIEF) { Join-Path $Src "content\briefs\$($env:BRIEF).yaml" } else { $null }
+    if ($BriefSrc -and (Test-Path $BriefSrc)) {
+        Copy-Item $BriefSrc $Brief
+        Write-Host "    브리프 적용: $($env:BRIEF) -> $Brief"
+    } else {
+        Copy-Item (Join-Path $Src 'content\channel-brief.example.yaml') $Brief
+        Write-Host "    빈 템플릿 생성: $Brief"
+    }
 } else {
     Write-Host "    이미 있음, 건드리지 않음: channel-brief.yaml"
 }
