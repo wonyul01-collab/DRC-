@@ -27,6 +27,10 @@ shotlist.json 형식:
   - note 는 보조 자막입니다. 출처·기준값·다음 편 예고처럼 본문을 방해하지 않고
     작게 깔아야 하는 것에 씁니다. 쪼개지 않고 그 shot 전체에 한 줄로 표시됩니다.
     크기·색·위치는 스타일 파일의 subtitle.secondary 에서 조정합니다.
+  - shotlist 최상위에 "audio": "narration.mp3" 를 두면 그 파일 하나를 전체에
+    깔고 각 shot 은 duration 으로 나뉩니다. 타입캐스트 같은 유료 TTS 에서
+    한 번에 내보낸 나레이션을 쓸 때 편합니다. 이때는 모든 shot 에 duration 이
+    있어야 합니다.
   - clip 에 "@black" 을 쓰면 검은 화면을 스크립트가 직접 만듭니다. 생성 크레딧이
     들지 않습니다. 절단마공 엔딩의 블랙아웃에 씁니다. "@color:0x101820" 도 됩니다.
   - voice.provider 가 none 이면 각 shot 에 "duration"(초)이 있어야 합니다.
@@ -445,7 +449,25 @@ def cmd_build(args: argparse.Namespace) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     work = Path(tempfile.mkdtemp(prefix="short-"))
-    silent = voice_cfg.get("provider", "edge") == "none"
+
+    # 전체 나레이션 파일 하나를 통째로 까는 방식.
+    # 타입캐스트 같은 유료 TTS 에서 문장별로 11개를 따로 받는 것은 번거롭습니다.
+    # 한 번에 내보낸 mp3 를 shotlist 최상위 "audio" 에 지정하면
+    # 각 shot 은 duration 으로 나뉘고 나레이션은 그 위에 이어서 흐릅니다.
+    whole_audio: Path | None = None
+    if shotlist.get("audio"):
+        whole_audio = Path(shotlist["audio"])
+        if not whole_audio.is_absolute():
+            whole_audio = base / whole_audio
+        if not whole_audio.is_file():
+            sys.exit(f"나레이션 파일이 없습니다: {whole_audio}")
+        missing = [i for i, s in enumerate(shots) if "duration" not in s]
+        if missing:
+            sys.exit("전체 나레이션(audio)을 쓸 때는 모든 shot 에 duration 이 필요합니다.\n"
+                     f"빠진 shot: {missing}\n"
+                     "나레이션을 들으면서 각 문장이 끝나는 시각으로 duration 을 정하세요.")
+
+    silent = whole_audio is not None or voice_cfg.get("provider", "edge") == "none"
 
     seg_videos: list[Path] = []
     seg_audios: list[Path] = []
@@ -576,7 +598,24 @@ def cmd_build(args: argparse.Namespace) -> None:
     merged_v = work / "video.mp4"
     merged_a = work / "audio.m4a"
     concat(seg_videos, merged_v, ["-c", "copy"])
-    concat(seg_audios, merged_a, ["-c", "copy"])
+
+    if whole_audio:
+        # 전체 나레이션을 영상 길이에 맞춰 자르거나 무음으로 채웁니다.
+        run(["ffmpeg", "-y", "-loglevel", "error",
+             "-i", str(whole_audio),
+             "-f", "lavfi", "-t", f"{timeline:.3f}", "-i", "anullsrc=r=44100:cl=stereo",
+             "-filter_complex",
+             "[0:a]aresample=44100[a0];[a0][1:a]amix=inputs=2:duration=longest[out]",
+             "-map", "[out]", "-t", f"{timeline:.3f}",
+             "-c:a", "aac", "-b:a", "128k", str(merged_a)])
+        narration_len = probe_duration(whole_audio)
+        if abs(narration_len - timeline) > 1.5:
+            print(f"경고: 나레이션 {narration_len:.1f}초 vs 영상 {timeline:.1f}초 — "
+                  f"{abs(narration_len - timeline):.1f}초 차이가 납니다.\n"
+                  f"      shot 의 duration 합을 나레이션 길이에 맞추세요.",
+                  file=sys.stderr)
+    else:
+        concat(seg_audios, merged_a, ["-c", "copy"])
 
     # 6) 자막 굽고 오디오 붙이기
     ass_path = work / "subs.ass"
