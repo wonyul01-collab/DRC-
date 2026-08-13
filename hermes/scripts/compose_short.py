@@ -198,15 +198,96 @@ def synth_edge(text: str, voice_cfg: dict, out_path: Path) -> None:
     asyncio.run(go())
 
 
+def hermes_home() -> Path:
+    env = os.environ.get("HERMES_HOME")
+    if env:
+        return Path(env).expanduser()
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"]) / "hermes"
+    return Path.home() / ".hermes"
+
+
+def shared_keys() -> dict:
+    """secrets/api_keys.txt 에 모아둔 키들. setup_keys.py 가 만드는 파일."""
+    path = hermes_home() / "secrets" / "api_keys.txt"
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    found = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        value = value.strip().strip('"').strip("'").strip()
+        if value:
+            found[name.strip().upper()] = value
+    return found
+
+
+def synth_typecast(text: str, voice_cfg: dict, out_path: Path) -> None:
+    """타입캐스트 TTS. edge-tts 보다 훨씬 자연스럽지만 유료입니다.
+
+    POST https://api.typecast.ai/v1/text-to-speech
+      헤더  X-API-KEY
+      본문  voice_id, text, model, language
+      응답  오디오 바이트
+
+    voice_id 는 스타일 파일의 voice.name 에 넣습니다 (tc_ 로 시작).
+    목소리 목록은 타입캐스트 API 콘솔이나 GET /v1/voices 에서 확인하세요.
+    """
+    import urllib.error
+    import urllib.request
+
+    key = os.environ.get("TYPECAST_API_KEY", "").strip() or shared_keys().get("TYPECAST_API_KEY")
+    if not key:
+        sys.exit("TYPECAST_API_KEY 를 찾지 못했습니다.\n"
+                 "      python setup_keys.py\n"
+                 "  로 키 파일을 열어 붙여넣으세요.")
+
+    voice_id = voice_cfg.get("name", "")
+    if not voice_id.startswith("tc_"):
+        sys.exit(f"voice.name 이 타입캐스트 voice_id 가 아닙니다: {voice_id!r}\n"
+                 "  tc_ 로 시작하는 값이어야 합니다. 타입캐스트 API 콘솔에서 확인하세요.")
+
+    body = {
+        "voice_id": voice_id,
+        "text": text,
+        "model": voice_cfg.get("model", "ssfm-v30"),
+        "language": voice_cfg.get("language", "kor"),
+    }
+    for key_name in ("emotion_prompt", "volume", "pitch", "tempo"):
+        if key_name in voice_cfg:
+            body[key_name] = voice_cfg[key_name]
+
+    req = urllib.request.Request(
+        "https://api.typecast.ai/v1/text-to-speech",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-API-KEY": key},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            out_path.write_bytes(resp.read())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")[:500]
+        sys.exit(f"타입캐스트 API 오류 {exc.code}:\n{detail}\n"
+                 "  voice_id·model·language 가 맞는지 확인하세요.")
+    except urllib.error.URLError as exc:
+        sys.exit(f"타입캐스트 네트워크 오류: {exc.reason}")
+
+
 def synth_narration(text: str, voice_cfg: dict, out_path: Path) -> None:
     provider = voice_cfg.get("provider", "edge")
     if provider == "edge":
         synth_edge(text, voice_cfg, out_path)
-    elif provider == "elevenlabs":
-        sys.exit("ElevenLabs 연동은 아직 없습니다. voice.provider 를 edge 로 두거나 "
-                 "shotlist 에 audio 경로를 직접 지정하세요.")
+    elif provider == "typecast":
+        synth_typecast(text, voice_cfg, out_path)
     else:
-        sys.exit(f"알 수 없는 voice.provider: {provider}")
+        sys.exit(f"알 수 없는 voice.provider: {provider}\n"
+                 "  쓸 수 있는 값: edge(무료), typecast(유료), none(무음).\n"
+                 "  또는 shotlist 최상위 audio 에 직접 만든 mp3 를 지정하세요.")
 
 
 # --------------------------------------------------------------------------

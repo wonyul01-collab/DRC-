@@ -197,9 +197,20 @@ subtitle:
 # 4. 목소리
 # ---------------------------------------------------------------
 voice:
+  # edge     — 무료. 기계적으로 들린다. 연습용.
+  # typecast — 유료. 훨씬 자연스럽다. name 에 tc_ 로 시작하는 voice_id 를 넣고
+  #            setup_keys.py 로 TYPECAST_API_KEY 를 넣어두면 된다.
+  # none     — 무음. shot 마다 duration 을 준다.
+  #
+  # 또는 shotlist 최상위에 "audio": "narration.mp3" 를 두면 밖에서 만든
+  # 나레이션 파일 하나를 통째로 쓴다. 타입캐스트 웹에서 받아 쓸 때 편하다.
   provider: "edge"
-  name: "ko-KR-InJoonNeural"        # 남성. 여성은 ko-KR-SunHiNeural
-  rate: "+15%"                      # 몰아치는 속도
+  name: "ko-KR-InJoonNeural"        # typecast 로 바꾸면 tc_... 형식
+  # typecast 전용 (provider 가 typecast 일 때만 쓰임)
+  # model: "ssfm-v30"
+  # language: "kor"
+  # emotion_prompt: "차분하게 설명하듯"
+  rate: "+15%"                      # edge 전용. 몰아치는 속도
   pitch: "+0Hz"
   volume: "+0%"
   tone_note: "빠르고 담백. 과장된 리액션은 나레이션이 아니라 효과음이 맡는다."

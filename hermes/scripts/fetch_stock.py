@@ -55,6 +55,25 @@ def hermes_home() -> Path:
     return Path.home() / ".hermes"
 
 
+def shared_keys() -> dict:
+    """secrets/api_keys.txt 에 모아둔 키들. setup_keys.py 가 만드는 파일."""
+    path = hermes_home() / "secrets" / "api_keys.txt"
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    found = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        value = value.strip().strip('"').strip("'").strip()
+        if value:
+            found[name.strip().upper()] = value
+    return found
+
+
 def key_file_candidates() -> list[Path]:
     here = Path(__file__).resolve().parent
     return [hermes_home() / "secrets" / KEY_FILENAME, here / KEY_FILENAME,
@@ -82,6 +101,9 @@ def load_api_key() -> str:
     env_key = os.environ.get("PEXELS_API_KEY", "").strip()
     if env_key:
         return env_key
+    shared = shared_keys().get("PEXELS_API_KEY")
+    if shared:
+        return shared
     for path in key_file_candidates():
         key = read_key_file(path)
         if key:
@@ -89,7 +111,7 @@ def load_api_key() -> str:
     listed = "\n".join(f"      {p}" for p in key_file_candidates())
     sys.exit(
         "Pexels API 키를 찾지 못했습니다.\n\n"
-        f"      python {Path(__file__).name} --setup\n\n"
+        "      python setup_keys.py\n\n"
         "  으로 키 파일을 만들고 붙여넣으세요.\n"
         "  발급: https://www.pexels.com/api/ (무료, 1분)\n\n"
         "  아래 위치 중 아무 곳에나 직접 만드셔도 됩니다:\n"

@@ -3,6 +3,7 @@
 *client_secret*.json
 *token*.json
 *api_key*.txt
+api_keys.txt
 secrets/
 
 # 생성물
