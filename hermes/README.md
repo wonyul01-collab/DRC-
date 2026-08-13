@@ -77,6 +77,7 @@ hermes/
 ## 설치
 
 **Windows 사용자는 [WINDOWS.md](WINDOWS.md) 를 보세요.** WSL2 / 네이티브에 따라 절차가 다릅니다.
+**이미 설치돼 있고 며칠 만에 다시 여신 거라면 [RESUME.md](RESUME.md) 로 가세요.**
 
 ```bash
 bash hermes/install.sh        # Linux / macOS / WSL2
