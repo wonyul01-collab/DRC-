@@ -95,7 +95,8 @@ python {scripts_dir}/compose_short.py build \
 
 - 스크립트가 TTS 생성 → 컷 길이 계산 → 세로 크롭 → 자막 번인 → 오디오 합성을 한 번에 한다.
 - 출력 JSON 의 `duration_seconds` 를 확인한다. 60초를 넘으면 경고가 뜬다. 대본을 줄인다.
-- 처음 실행이라면 먼저 `python {scripts_dir}/compose_short.py check` 로 ffmpeg·edge-tts를 확인한다.
+- 처음 실행이라면 먼저 `python {scripts_dir}/compose_short.py check --style {style_path}` 로
+  ffmpeg·edge-tts·한글 폰트를 확인한다. `--style` 을 빼면 폰트 검사가 생략된다.
 
 ### 6. 사람 검수 게이트
 

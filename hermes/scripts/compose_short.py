@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -73,6 +74,53 @@ def load_style(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
+def _windows_font_families() -> list[str]:
+    """Windows 에 설치된 폰트의 '패밀리명'을 모은다.
+
+    파일명(stem)은 패밀리명이 아니다 — malgun.ttf 의 패밀리는 "Malgun Gothic" 이다.
+    그래서 레지스트리를 1순위로 읽고, 파일 스캔은 보조로만 쓴다.
+    사용자 폴더 설치 폰트(관리자 권한 없이 설치한 것)는 HKCU 와
+    %LOCALAPPDATA%\\Microsoft\\Windows\\Fonts 에 들어간다. 둘 다 봐야 한다.
+    """
+    names: set[str] = set()
+
+    try:
+        import winreg  # Windows 전용 표준 라이브러리
+
+        subkey = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            try:
+                with winreg.OpenKey(root, subkey) as key:
+                    for i in range(winreg.QueryInfoKey(key)[1]):
+                        value_name = winreg.EnumValue(key, i)[0]
+                        # "Pretendard Regular (OpenType)" -> "Pretendard Regular"
+                        cleaned = re.sub(r"\s*\([^)]*\)\s*$", "", value_name).strip()
+                        # "Malgun Gothic & Malgun Gothic Semilight" -> 각각 등록
+                        for part in cleaned.split("&"):
+                            part = part.strip()
+                            if part:
+                                names.add(part)
+            except OSError:
+                continue
+    except ImportError:
+        pass
+
+    # 보조: 폰트 폴더 파일명. 레지스트리에 없는 것을 놓치지 않기 위해서다.
+    # .otf 를 반드시 포함한다 — Pretendard 가 OTF 로 배포된다.
+    font_dirs = [Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"]
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        font_dirs.append(Path(local) / "Microsoft" / "Windows" / "Fonts")
+    for directory in font_dirs:
+        if not directory.is_dir():
+            continue
+        for pattern in ("*.ttf", "*.ttc", "*.otf", "*.TTF", "*.OTF"):
+            for path in directory.glob(pattern):
+                names.add(path.stem)
+
+    return sorted(names)
+
+
 def installed_font_families() -> list[str] | None:
     """설치된 폰트 패밀리 목록. 확인할 방법이 없으면 None."""
     if shutil.which("fc-list"):
@@ -82,33 +130,40 @@ def installed_font_families() -> list[str] | None:
             families: set[str] = set()
             for line in out.stdout.splitlines():
                 families.update(part.strip() for part in line.split(","))
-            return sorted(f for f in families if f)
+            if families:
+                return sorted(f for f in families if f)
     if sys.platform == "win32":
-        # 네이티브 Windows: 폰트 폴더의 파일명으로 대략 확인한다.
-        fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
-        if fonts.is_dir():
-            return sorted({p.stem for p in fonts.glob("*.tt[fc]")})
+        found = _windows_font_families()
+        return found or None
     return None
 
 
-def warn_if_font_missing(font_family: str) -> None:
-    """폰트명이 틀리면 ffmpeg가 조용히 기본 폰트로 떨어진다. 미리 잡는다."""
+def font_is_installed(font_family: str) -> tuple[bool | None, list[str]]:
+    """(설치 여부, 후보 목록). 확인할 방법이 없으면 여부가 None."""
     families = installed_font_families()
     if families is None or not font_family:
-        return
-    lowered = [f.lower() for f in families]
+        return None, families or []
     target = font_family.lower()
-    if any(target == f or target in f for f in lowered):
-        return
+    ok = any(target == f.lower() or target in f.lower() for f in families)
+    return ok, families
+
+
+def warn_if_font_missing(font_family: str) -> bool:
+    """폰트명이 틀리면 ffmpeg가 조용히 기본 폰트로 떨어진다. 미리 잡는다."""
+    ok, families = font_is_installed(font_family)
+    if ok is not False:
+        return True
     hint = ", ".join(f for f in families if any(
-        k in f.lower() for k in ("noto", "malgun", "pretendard", "nanum", "gothic")
+        k in f.lower() for k in ("noto", "malgun", "pretendard", "nanum", "gothic", "gulim", "batang")
     )) or ", ".join(families[:10])
     print(
         f"경고: 폰트 '{font_family}' 를 찾지 못했습니다. 자막이 기본 폰트로 나오거나 깨집니다.\n"
         f"       스타일 파일의 subtitle.font_family 를 아래 중 하나로 바꾸세요:\n"
-        f"       {hint}",
+        f"       {hint}\n"
+        f"       (또는 subtitle.font_file 에 폰트 파일 절대경로를 지정하면 이 검사를 건너뜁니다)",
         file=sys.stderr,
     )
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -241,7 +296,7 @@ def escape_for_filter(path: Path) -> str:
 # 빌드
 # --------------------------------------------------------------------------
 
-def cmd_check(_args: argparse.Namespace) -> None:
+def cmd_check(args: argparse.Namespace) -> None:
     ok = True
     for tool in ("ffmpeg", "ffprobe"):
         path = shutil.which(tool)
@@ -253,6 +308,30 @@ def cmd_check(_args: argparse.Namespace) -> None:
     except ImportError:
         print("edge-tts 없음 — pip install edge-tts (voice.provider=edge 를 쓸 때만 필요)")
         ok = False
+
+    # 폰트는 스타일 파일을 알아야 검사할 수 있다. --style 을 주면 실제로 검사한다.
+    if args.style:
+        style = load_style(Path(args.style).expanduser())
+        sub_cfg = style.get("subtitle") or {}
+        if sub_cfg.get("font_file"):
+            font_path = Path(sub_cfg["font_file"]).expanduser()
+            exists = font_path.is_file()
+            print(f"폰트     {'OK  ' + str(font_path) if exists else '파일 없음 — ' + str(font_path)}")
+            ok = ok and exists
+        else:
+            family = sub_cfg.get("font_family", "")
+            found, families = font_is_installed(family)
+            if found is None:
+                print(f"폰트     확인 불가 (설치 목록을 읽을 수 없음) — 설정값: {family or '없음'}")
+            elif found:
+                print(f"폰트     OK  {family}")
+            else:
+                print(f"폰트     없음 — '{family}'")
+                warn_if_font_missing(family)
+                ok = False
+    else:
+        print("폰트     건너뜀 — 검사하려면 --style <reference-style.yaml> 을 주세요")
+
     sys.exit(0 if ok else 1)
 
 
@@ -411,7 +490,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="쇼츠 합성 (클립 + TTS + 자막)")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("check", help="ffmpeg/edge-tts 설치 확인").set_defaults(func=cmd_check)
+    c = sub.add_parser("check", help="ffmpeg / edge-tts / 폰트 설치 확인")
+    c.add_argument("--style", help="reference-style.yaml 경로 (주면 폰트까지 검사)")
+    c.set_defaults(func=cmd_check)
 
     b = sub.add_parser("build", help="합성 실행")
     b.add_argument("--shotlist", required=True, help="shotlist JSON 경로")

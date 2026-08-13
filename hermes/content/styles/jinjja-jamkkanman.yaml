@@ -143,8 +143,9 @@ subtitle:
   #   틀리면 libass 가 에러를 내지 않고 조용히 기본 폰트로 떨어집니다.
   #   영상을 눈으로 보기 전까지 모릅니다. compose_short.py 가 미리 경고를 띄웁니다.
   #
-  #   확인:  fc-list :lang=ko family | tr ',' '\n' | sort -u      (Linux/WSL)
-  #          python compose_short.py check                        (어디서나)
+  #   확인:  python compose_short.py check --style <이 파일>       (어디서나)
+  #          fc-list :lang=ko family | tr ',' '\n' | sort -u      (Linux/WSL)
+  #   --style 을 빼면 폰트는 검사하지 않습니다.
   #
   #   Pretendard 를 기본으로 둡니다. 이름이 정확히 하나라 매칭 실패가 없고
   #   쇼츠 자막용으로 자간·굵기가 좋습니다.  https://github.com/orioncactus/pretendard

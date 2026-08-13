@@ -98,7 +98,8 @@ powershell -ExecutionPolicy Bypass -File hermes\install.ps1   # 네이티브 Win
    `python ~/.hermes/workspace/youtube/scripts/youtube_upload.py auth`
 4. **채널 브리프 작성** — `~/.hermes/workspace/youtube/channel-brief.yaml`
 5. **벤치마크 문법 심기** — 분석 노트를 주고 `/yt-style-extract` 실행
-6. **합성 도구 점검** — `python .../compose_short.py check`
+6. **합성 도구 점검** — `python .../compose_short.py check --style <reference-style.yaml>`
+   (`--style` 을 빼면 폰트는 검사하지 않습니다)
 
 ## 첫 실행
 
@@ -147,7 +148,7 @@ python compose_short.py build \
 | 크레딧 폭주 | `daily_video_cap`, 순차 생성, 2회 실패 시 중단 |
 | 이상한 영상 자동 공개 | 업로드 기본 `private`, 7항목 검수 체크리스트 |
 | 정책 위반 | 양산·복제 금지 명시, AI 공시(`--synthetic`), 실존 인물 재현 금지 |
-| 자막 깨짐 | install 시 한글 폰트 검사, `compose_short.py check` |
+| 자막 깨짐 | install 시 한글 폰트 검사, `compose_short.py check --style ...`, 렌더링 직전 재검사 |
 | 비밀값 유출 | 키는 `.env` 와 `~/.hermes/secrets`(700), config.yaml 에 넣지 않음 |
 
 ## 출처

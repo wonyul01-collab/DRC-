@@ -265,11 +265,20 @@ python analyze_reference.py --handle "@진짜잠깐만" --calibrate
 
 ### 5. 점검
 
+**`--style` 을 꼭 붙이세요.** 없으면 폰트를 검사하지 않습니다.
+
 ```bash
-python <스크립트경로>/compose_short.py check
+python <스크립트경로>/compose_short.py check --style <reference-style.yaml 경로>
 ```
 
-`ffmpeg OK`, `ffprobe OK`, `edge-tts OK` 세 줄이 나오면 준비 끝입니다.
+`ffmpeg` / `ffprobe` / `edge-tts` / `폰트` 네 줄이 모두 OK 면 준비 끝입니다.
+하나라도 실패하면 종료 코드가 1 이라 스크립트로도 판단할 수 있습니다.
+
+폰트 검사는 Windows 에서 **레지스트리의 패밀리명**을 읽습니다.
+파일명이 아니라 실제 패밀리명이라 `malgun.ttf` → `Malgun Gothic` 으로 잡히고,
+사용자 폴더(`%LOCALAPPDATA%\Microsoft\Windows\Fonts`)에 설치한 폰트와
+`.otf` 폰트도 인식합니다. Pretendard 는 OTF 로 배포되고 보통 사용자 폴더에
+설치되므로 이 둘이 다 필요합니다.
 
 ---
 

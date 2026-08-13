@@ -118,7 +118,8 @@ cat <<EOF
        > /yt-style-extract <분석 노트가 있는 경로> 를 읽고 스타일 파일을 채워줘
 
   6. 합성 도구 점검
-       python $WORKSPACE/scripts/compose_short.py check
+       python $WORKSPACE/scripts/compose_short.py check \\
+         --style $WORKSPACE/reference-style.yaml
 
   7. 예약 작업 등록: hermes/cron/jobs.md 참고
 EOF

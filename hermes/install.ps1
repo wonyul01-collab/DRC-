@@ -95,12 +95,15 @@ if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
     Write-Host   "      설치 후 새 터미널을 열어야 PATH 가 잡힙니다." -ForegroundColor Yellow
 }
 
-$MalgunPath = Join-Path $env:WINDIR 'Fonts\malgun.ttf'
-if (Test-Path $MalgunPath) {
-    Write-Host "    한글 폰트 OK (맑은 고딕)"
-    Write-Host "    ※ reference-style.yaml 의 subtitle.font_family 를 'Malgun Gothic' 으로 두세요."
-} else {
-    Write-Warning "맑은 고딕을 찾지 못했습니다. 자막이 깨질 수 있습니다."
+# 폰트는 compose_short.py 가 레지스트리까지 읽어 정확히 판정합니다.
+# 여기서는 스타일 파일 기준으로 그 검사를 그대로 한 번 돌립니다.
+$fontCheck = & python (Join-Path $ScriptsDir 'compose_short.py') check --style $StyleDest 2>&1
+$fontLine = $fontCheck | Where-Object { $_ -match '^폰트' }
+if ($fontLine) { Write-Host "    $fontLine" }
+if ($fontCheck -match "찾지 못했습니다") {
+    Write-Warning "자막 폰트가 없습니다. 아래 중 하나로 해결하세요."
+    Write-Host "      1) Pretendard 설치: https://github.com/orioncactus/pretendard/releases" -ForegroundColor Yellow
+    Write-Host "      2) $StyleDest 의 subtitle.font_family 를 'Malgun Gothic' 으로 변경" -ForegroundColor Yellow
 }
 
 @"
@@ -124,7 +127,7 @@ if (Test-Path $MalgunPath) {
        notepad $Brief
 
   5. 합성 도구 점검
-       python $ScriptsDir\compose_short.py check
+       python $ScriptsDir\compose_short.py check --style $StyleDest
 
   6. 예약 작업 등록: hermes\cron\jobs.md 참고
 "@ | Write-Host
