@@ -26,13 +26,24 @@ mcp_servers:
     # 크레딧 낭비를 막기 위해 동시 호출을 끕니다.
     supports_parallel_tool_calls: false
     tools:
-      # 생성 계열만 노출해서 에이전트가 엉뚱한 툴을 쓰지 않게 제한합니다.
-      # 실제 툴 이름은 Hermes 대화창에서 에이전트에게 물어보면 됩니다
+      # ★ include 는 화이트리스트입니다. 여기 적힌 것만 에이전트에게 노출됩니다.
+      #   Higgsfield MCP 는 86개 툴을 내보내는데 그중에 결제 계열이 섞여 있습니다
+      #   (confirm_billing_purchase, cancel_trial_auto_renewal 등).
+      #
+      # ⚠ 결제·구매·구독 변경 계열은 include 에 절대 넣지 마세요.
+      #   돈이 나가고 되돌릴 수 없는 동작입니다. cron 으로 무인 실행될 때
+      #   "크레딧이 부족하니 사면 되겠네" 로 이어질 수 있습니다.
+      #   문서상 include 와 exclude 가 같이 있으면 include 가 이깁니다.
+      #   그래서 방어선은 exclude 가 아니라 include 를 좁게 유지하는 것입니다.
+      #
+      # 아래는 이름을 모르는 상태의 임시 글롭입니다. 실제 툴 이름을 확보하면
+      # 정확한 이름 목록으로 바꾸세요 (글롭보다 오탐이 없습니다).
+      # 툴 이름은 Hermes 대화창에서 에이전트에게 물어보면 됩니다
       # ("지금 쓸 수 있는 higgsfield 툴 이름을 나열해줘"). CLI 로 확인하려 들지 마세요.
       include:
-        - "generate_*"
-        - "get_*"
-        - "list_*"
+        - "generate_*"      # 영상·이미지 생성
+        - "get_*"           # 조회 (잔액·작업상태 포함, 읽기 전용)
+        - "list_*"          # 목록 (모델·프리셋)
       prompts: true
       resources: true
 

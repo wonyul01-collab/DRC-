@@ -50,6 +50,18 @@ hermes cron edit yt-daily-produce
 hermes cron remove yt-daily-produce
 ```
 
+## cron 을 켜기 전 체크리스트
+
+무인 실행이라 사람이 못 막습니다. 아래를 먼저 확인하세요.
+
+- [ ] **Higgsfield 결제 계열 툴이 차단돼 있는가** — `mcp_servers.higgsfield.tools.include` 가
+      생성·조회 계열로만 좁혀져 있어야 합니다. `confirm_billing_purchase` 같은 툴이
+      열린 채로 cron 을 돌리면 크레딧이 떨어졌을 때 자동으로 결제할 수 있습니다.
+- [ ] **크레딧 잔량을 확인했는가** — 잔량에 맞춰 `daily_video_cap` 을 정하세요.
+      무료 체험이면 하루 3편으로 며칠 만에 소진됩니다.
+- [ ] **수동으로 한 바퀴 돌려봤는가** — `hermes cron run <이름>` 으로 1회 테스트.
+- [ ] **업로드가 private 로 끝나는가** — 검수 없이 공개되면 되돌리기 어렵습니다.
+
 ## 주의
 
 - 예약 작업은 **매번 새 세션**에서 돕니다. 이전 대화 맥락이 없으므로, 프롬프트에 필요한 정보가
