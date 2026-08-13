@@ -219,6 +219,21 @@ hermes mcp login higgsfield
 > 사고가 났다면 `config.yaml.bak-*` 백업이 같은 폴더에 있습니다.
 > `platform_toolsets.cli` 를 원래 값(보통 `['hermes-cli']`)으로 되돌리면 복구됩니다.
 
+### `-t` 플래그도 조심하세요 (미확인 가설)
+
+`hermes -t hermes-cli,mcp-higgsfield -z "..."` 처럼 툴셋을 명시한 직후
+`platform_toolsets.cli` 가 개별 툴셋 목록으로 펼쳐지고 MCP 툴이
+`TOOL_UNAVAILABLE` 로 사라지는 현상을 겪었습니다. **인과는 확인되지 않았지만
+시간 순서가 겹칩니다.**
+
+MCP 서버 툴은 런타임에 `mcp-<이름>` 으로 등록되는 것이라 `-t` 의 툴셋 목록에
+넣을 대상이 아닐 수 있습니다. 넣으면 오히려 화이트리스트로 작동해 차단될
+여지가 있습니다.
+
+**MCP 툴을 쓸 때는 `-t` 를 붙이지 마세요.** 그냥 `hermes -z "..."` 로
+호출하면 등록된 MCP 툴이 그대로 보입니다. 실제로 세션 초반 `-t` 없이 호출한
+`balance` 는 성공했습니다.
+
 ### 3. YouTube 인증 (업로드용)
 
 Google Cloud Console → **YouTube Data API v3 사용 설정** →
