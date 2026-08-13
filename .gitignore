@@ -1,0 +1,10 @@
+# 비밀값·인증 토큰은 절대 커밋하지 않습니다
+.env
+*client_secret*.json
+*token*.json
+secrets/
+
+# 생성물
+out/
+__pycache__/
+*.pyc
