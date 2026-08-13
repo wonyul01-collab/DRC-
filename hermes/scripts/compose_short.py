@@ -269,35 +269,51 @@ def _style_line(name: str, font_name: str, cfg: dict, defaults: dict) -> str:
     ])
 
 
-# 보조 자막(출처·기준·다음 편 예고)의 기본값. 본 자막보다 작고, 더 아래에,
-# 흰색이 아닌 회색으로 깔립니다. 본문을 방해하지 않는 것이 목적입니다.
-SECONDARY_DEFAULTS = {
-    "font_size": 38,
-    "primary_color": "&H00C8C8C8",   # 밝은 회색
-    "outline_color": "&H00000000",
-    "outline_width": 3,
-    "shadow": 0,
-    "bold": False,
-    "alignment": 2,                  # 하단 중앙
-    # 쇼츠 UI(채널명·설명·버튼)가 화면 하단 약 200px 을 덮습니다.
-    # 그 위에 놓되 본 자막(기본 320)과는 겹치지 않는 자리가 250 입니다.
-    # 시청자가 55~75세면 이보다 더 작게 내리지 마세요. 안 보입니다.
-    "margin_vertical": 250,
-}
+# 본 자막. 세로 1920 기준 margin_vertical 700 이면 화면 아래에서 약 36%,
+# 즉 하단 1/3~2/5 지점입니다. 쇼츠 UI 를 확실히 피하고 시선이 머무는 자리입니다.
 PRIMARY_DEFAULTS = {
-    "font_size": 72,
+    "font_size": 96,
     "primary_color": "&H00FFFFFF",
     "outline_color": "&H00000000",
-    "outline_width": 4,
+    "outline_width": 6,
     "shadow": 0,
     "bold": True,
     "alignment": 2,
-    "margin_vertical": 320,
+    "margin_vertical": 700,
 }
 
+# 보조 자막(출처·기준값·다음 편 예고). 본 자막보다 작지만
+# "읽히지 않을 만큼" 작으면 넣는 의미가 없습니다. 55~75세 시청자 기준입니다.
+SECONDARY_DEFAULTS = {
+    "font_size": 52,
+    "primary_color": "&H00D2D2D2",   # 살짝 어두운 흰색 — 본문과 위계만 만든다
+    "outline_color": "&H00000000",
+    "outline_width": 4,
+    "shadow": 0,
+    "bold": False,
+    "alignment": 2,
+    "margin_vertical": 560,          # 본 자막(700) 바로 아래
+}
 
-def build_ass(cues: list[tuple[float, float, str, str]], sub_cfg: dict) -> str:
-    """cues 는 (시작, 끝, 텍스트, 스타일명). 스타일명은 Default 또는 Note."""
+# 강조색 기본값. ASS 는 &HBBGGRR 순서라 RGB 와 순서가 반대입니다.
+DEFAULT_HIGHLIGHT_COLOR = "&H0000D7FF"   # 주황빛 노랑 (RGB FFD700)
+
+
+def apply_highlight(escaped: str, words: list[str], color: str) -> str:
+    """이미 이스케이프된 자막에서 지정한 단어만 색을 바꾼다.
+
+    ASS 인라인 태그를 넣는 것이라 반드시 이스케이프 뒤에 호출해야 한다.
+    \\r 은 스타일 기본색으로 되돌린다.
+    """
+    for word in words:
+        word = (word or "").strip()
+        if word and word in escaped:
+            escaped = escaped.replace(word, f"{{\\c{color}}}{word}{{\\r}}")
+    return escaped
+
+
+def build_ass(cues: list[tuple[float, float, str, str, list[str]]], sub_cfg: dict) -> str:
+    """cues 는 (시작, 끝, 텍스트, 스타일명, 강조단어들)."""
     font_name = sub_cfg.get("font_family", "Pretendard")
     if sub_cfg.get("font_file"):
         # fontsdir 로 폰트를 넘길 때도 FontName 은 파일의 실제 패밀리명이어야 합니다.
@@ -325,8 +341,11 @@ def build_ass(cues: list[tuple[float, float, str, str]], sub_cfg: dict) -> str:
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
-    for start, end, text, style_name in cues:
+    highlight_color = sub_cfg.get("highlight_color", DEFAULT_HIGHLIGHT_COLOR)
+    for start, end, text, style_name, highlights in cues:
         safe = text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
+        if highlights:
+            safe = apply_highlight(safe, highlights, highlight_color)
         lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},{style_name},,0,0,0,,{safe}")
     return "\n".join(lines) + "\n"
 
@@ -430,7 +449,7 @@ def cmd_build(args: argparse.Namespace) -> None:
 
     seg_videos: list[Path] = []
     seg_audios: list[Path] = []
-    cues: list[tuple[float, float, str, str]] = []
+    cues: list[tuple[float, float, str, str, list[str]]] = []
     fit_log: list[dict] = []
     timeline = 0.0
 
@@ -525,20 +544,25 @@ def cmd_build(args: argparse.Namespace) -> None:
         # 4) 자막 큐 — shot 길이를 덩어리 길이 비율로 나눈다
         text = shot.get("subtitle", narration)
         pieces = chunk_text(text, int(sub_cfg.get("max_chars_per_cue", 18)))
+        # shot 의 highlight 에 적힌 단어는 강조색으로 나옵니다.
+        highlights = shot.get("highlight") or []
+        if isinstance(highlights, str):
+            highlights = [highlights]
+
         if pieces:
             total_chars = sum(len(p) for p in pieces)
             lead = float(sub_cfg.get("lead_seconds", 0.0))
             cursor = timeline + lead
             for piece in pieces:
                 span = duration * (len(piece) / total_chars)
-                cues.append((cursor, cursor + span, piece, "Default"))
+                cues.append((cursor, cursor + span, piece, "Default", highlights))
                 cursor += span
 
         # 4-A) 보조 자막 — 출처, 기준값, 다음 편 예고 같은 것.
         #      쪼개지 않고 shot 전체에 한 줄로 깔린다. 본 자막보다 작고 아래에 있다.
         note = (shot.get("note") or "").strip()
         if note:
-            cues.append((timeline, timeline + duration, note, "Note"))
+            cues.append((timeline, timeline + duration, note, "Note", []))
 
         timeline += duration
 
@@ -563,16 +587,30 @@ def cmd_build(args: argparse.Namespace) -> None:
         fonts_dir = Path(sub_cfg["font_file"]).expanduser().parent
         sub_filter += f":fontsdir='{escape_for_filter(fonts_dir)}'"
 
-    run([
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-i", str(merged_v), "-i", str(merged_a),
-        "-vf", sub_filter,
-        "-map", "0:v:0", "-map", "1:a:0",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k",
-        "-shortest", "-movflags", "+faststart",
-        str(out_path),
-    ])
+    # 전체 배속. 자막을 구운 뒤에 걸어야 자막까지 같이 빨라집니다.
+    # 오디오는 atempo 로 맞춰서 목소리 높이가 변하지 않게 합니다.
+    speed = float(visual_cfg.get("playback_speed", 1.0))
+    if speed <= 0:
+        sys.exit("visual.playback_speed 는 0보다 커야 합니다.")
+    vf = sub_filter
+    af = None
+    if abs(speed - 1.0) > 1e-6:
+        vf = f"{sub_filter},setpts=PTS/{speed:.6f}"
+        af = f"atempo={speed:.6f}"     # atempo 는 0.5~2.0 범위에서 유효
+        if not 0.5 <= speed <= 2.0:
+            sys.exit(f"visual.playback_speed 는 0.5~2.0 사이여야 합니다 (지금 {speed}).")
+
+    cmd = ["ffmpeg", "-y", "-loglevel", "error",
+           "-i", str(merged_v), "-i", str(merged_a),
+           "-vf", vf]
+    if af:
+        cmd += ["-af", af]
+    cmd += ["-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest", "-movflags", "+faststart",
+            str(out_path)]
+    run(cmd)
 
     result = {
         "output": str(out_path),
@@ -581,9 +619,11 @@ def cmd_build(args: argparse.Namespace) -> None:
         "subtitle_cues": sum(1 for c in cues if c[3] == "Default"),
         "note_cues": sum(1 for c in cues if c[3] == "Note"),
         "clip_fit": fit_log,
+        "playback_speed": speed,
+        "final_seconds": round(timeline / speed, 2),
         "narration": "none" if silent else voice_cfg.get("name", ""),
     }
-    if timeline > 60:
+    if timeline / speed > 60:
         result["warning"] = "60초를 넘습니다. 쇼츠로 안 잡힐 수 있습니다."
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

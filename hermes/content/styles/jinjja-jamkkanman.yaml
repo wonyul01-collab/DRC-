@@ -157,15 +157,22 @@ subtitle:
   #                            Black/Bold/Regular 만 등록된 시스템에서는 매칭에 실패합니다.
   font_family: "Pretendard"
   font_file: ""
-  font_size: 78
+  font_size: 96                     # 시청자가 55~75세다. 작으면 안 읽는다.
   bold: true
   primary_color: "&H00FFFFFF"       # 흰색
   outline_color: "&H00000000"       # 검정 외곽선
-  outline_width: 5
+  outline_width: 6
   shadow: 0
   alignment: 2                      # 하단 중앙
-  margin_vertical: 340              # 쇼츠 UI에 안 가리게
-  max_chars_per_cue: 16             # 툭툭 던지는 리듬
+  # 1920 기준 700 이면 화면 아래에서 약 36% — 하단 1/3~2/5 지점.
+  # 쇼츠 UI 를 확실히 피하고 시선이 머무는 자리다.
+  margin_vertical: 700
+  max_chars_per_cue: 14             # 글자가 커졌으니 한 줄에 덜 들어간다
+
+  # 강조색. shotlist 의 shot.highlight 에 적은 단어가 이 색으로 나온다.
+  # ASS 는 &HBBGGRR 순서라 RGB 와 반대다. 아래는 RGB FFD700 (금색).
+  # 숫자와 반전 지점에만 쓴다. 남발하면 강조가 아니라 소음이 된다.
+  highlight_color: "&H0000D7FF"
   lead_seconds: -0.05               # 소리보다 아주 살짝 먼저
   style_note: "비포/애프터나 반전 구간에서는 자막이 즉시 바뀌며 '사이다'를 준다. 강조어는 색을 바꿔도 좋다."
 
@@ -174,16 +181,15 @@ subtitle:
   # 본문을 방해하지 않고 작게 깔아야 하는 것에 씁니다.
   # 쪼개지 않고 그 shot 전체에 한 줄로 표시됩니다.
   secondary:
-    font_size: 38                   # 본 자막의 절반 정도
-    primary_color: "&H00C8C8C8"     # 밝은 회색 — 흰색 본문과 위계를 만든다
+    # 본 자막보다 작되 "안 읽힐 만큼" 작으면 넣는 의미가 없습니다.
+    # 38pt 로 해봤더니 화면에서 안 보였습니다. 52pt 가 하한입니다.
+    font_size: 52
+    primary_color: "&H00D2D2D2"     # 살짝 어두운 흰색 — 본문과 위계만 만든다
     outline_color: "&H00000000"
-    outline_width: 3
+    outline_width: 4
     bold: false
     alignment: 2                    # 하단 중앙
-    # 쇼츠 UI(진행바·채널명·설명)가 화면 하단 약 200px 를 덮습니다.
-    # 그 위에 놓되 본 자막(340)과 겹치지 않는 자리가 250 입니다.
-    # 시청자가 55~75세면 이보다 아래로 내리거나 크기를 줄이지 마세요.
-    margin_vertical: 250
+    margin_vertical: 560            # 본 자막(700) 바로 아래
 
 # ---------------------------------------------------------------
 # 4. 목소리
@@ -208,6 +214,10 @@ visual:
   # 넘으면 루프하고 경고를 띄웁니다 — 이어지는 지점에서 화면이 튀기 때문입니다.
   # 실측: Higgsfield 생성 클립은 5초 안팎입니다. shot 을 10초 넘게 잡지 마세요.
   max_slowdown: 2.0
+  # 최종 배속. 자막을 구운 뒤에 걸리므로 자막도 같이 빨라집니다.
+  # 오디오는 atempo 로 맞춰서 목소리 높이가 변하지 않습니다.
+  # 1.1 이면 몰아치는 느낌이 살아납니다. 0.5~2.0 범위만 됩니다.
+  playback_speed: 1.1
   mood: "채도·대비 강함. 밝고 선명하게."
   camera: "고정샷과 클로즈업 교차. 절정 구간에서 급격한 줌인 1회."
   subject_type: "실사 기반"
