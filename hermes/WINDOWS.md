@@ -5,22 +5,30 @@ Windows에서 Hermes를 돌리는 방법은 두 가지고, **설치 방법이 �
 
 ## 0. 내 Hermes는 어디에 깔렸나
 
+**폴더 존재 여부로 판단하지 마세요.** `analyze_reference.py --setup` 이
+`%LOCALAPPDATA%\hermes\secrets\` 를 만들기 때문에, Hermes 가 없어도 그 경로는
+생길 수 있습니다. 실행 파일로 판단해야 합니다.
+
 Windows 터미널(PowerShell)에서:
 
 ```powershell
-# 네이티브 Windows 설치인가?
-Test-Path "$env:LOCALAPPDATA\hermes"
-
-# WSL2 설치인가?
-wsl test -d ~/.hermes && echo "WSL2에 있음"
+# 설치 여부와 위치를 한 번에
+hermes --version
+Get-Command hermes | Select-Object -ExpandProperty Source
 ```
 
-| 결과 | 갈 길 |
+| `Get-Command` 결과 | 갈 길 |
 |---|---|
-| WSL2 쪽이 `True` | **경로 A** (권장) |
-| 네이티브 쪽만 `True` | 경로 B |
-| 둘 다 `True` | 실제로 쓰는 쪽. `hermes --version` 이 어디서 도는지 확인 |
-| 둘 다 `False` | Hermes가 아직 안 깔렸습니다 |
+| `...\AppData\Local\hermes\hermes-agent\venv\Scripts\hermes.exe` | **네이티브 Windows** → 경로 B |
+| WSL 안에서만 `hermes --version` 이 응답 | **WSL2** → 경로 A |
+| 양쪽 다 응답 | 실제로 쓰실 쪽을 고르세요 |
+| `명령을 찾을 수 없습니다` | 아직 미설치 |
+
+WSL2 쪽도 따로 확인하려면:
+
+```powershell
+wsl bash -lc "hermes --version"
+```
 
 > **왜 WSL2를 권하는가**: 이 파이프라인은 ffmpeg·edge-tts·bash에 기대고 있고,
 > Hermes 자체도 리눅스 경로가 더 검증돼 있습니다. 네이티브 Windows도 되게
