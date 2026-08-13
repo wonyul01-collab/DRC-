@@ -76,8 +76,13 @@ hermes/
 
 ## 설치
 
+**Windows 사용자는 [WINDOWS.md](WINDOWS.md) 를 보세요.** WSL2 / 네이티브에 따라 절차가 다릅니다.
+
 ```bash
-bash hermes/install.sh
+bash hermes/install.sh        # Linux / macOS / WSL2
+```
+```powershell
+powershell -ExecutionPolicy Bypass -File hermes\install.ps1   # 네이티브 Windows
 ```
 
 `~/.hermes/config.yaml` 은 **자동으로 안 건드립니다.** 기존 설정을 깨뜨리지 않으려고

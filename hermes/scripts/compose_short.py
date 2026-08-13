@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,44 @@ def load_style(path: Path) -> dict:
         sys.exit(f"스타일 파일이 없습니다: {path}\n"
                  "content/reference-style.example.yaml 를 복사해서 채우세요.")
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def installed_font_families() -> list[str] | None:
+    """설치된 폰트 패밀리 목록. 확인할 방법이 없으면 None."""
+    if shutil.which("fc-list"):
+        out = subprocess.run(["fc-list", ":lang=ko", "family"],
+                             capture_output=True, text=True)
+        if out.returncode == 0:
+            families: set[str] = set()
+            for line in out.stdout.splitlines():
+                families.update(part.strip() for part in line.split(","))
+            return sorted(f for f in families if f)
+    if sys.platform == "win32":
+        # 네이티브 Windows: 폰트 폴더의 파일명으로 대략 확인한다.
+        fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+        if fonts.is_dir():
+            return sorted({p.stem for p in fonts.glob("*.tt[fc]")})
+    return None
+
+
+def warn_if_font_missing(font_family: str) -> None:
+    """폰트명이 틀리면 ffmpeg가 조용히 기본 폰트로 떨어진다. 미리 잡는다."""
+    families = installed_font_families()
+    if families is None or not font_family:
+        return
+    lowered = [f.lower() for f in families]
+    target = font_family.lower()
+    if any(target == f or target in f for f in lowered):
+        return
+    hint = ", ".join(f for f in families if any(
+        k in f.lower() for k in ("noto", "malgun", "pretendard", "nanum", "gothic")
+    )) or ", ".join(families[:10])
+    print(
+        f"경고: 폰트 '{font_family}' 를 찾지 못했습니다. 자막이 기본 폰트로 나오거나 깨집니다.\n"
+        f"       스타일 파일의 subtitle.font_family 를 아래 중 하나로 바꾸세요:\n"
+        f"       {hint}",
+        file=sys.stderr,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -223,6 +262,9 @@ def cmd_build(args: argparse.Namespace) -> None:
     voice_cfg = style.get("voice") or {}
     visual_cfg = style.get("visual") or {}
     fps = int(visual_cfg.get("fps", 30))
+
+    if not sub_cfg.get("font_file"):
+        warn_if_font_missing(sub_cfg.get("font_family", ""))
 
     shotlist = json.loads(Path(args.shotlist).expanduser().read_text(encoding="utf-8"))
     shots = shotlist.get("shots") or []
