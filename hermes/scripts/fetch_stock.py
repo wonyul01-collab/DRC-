@@ -37,6 +37,12 @@ from pathlib import Path
 API = "https://api.pexels.com/videos"
 KEY_FILENAME = "pexels_api_key.txt"
 
+# Cloudflare 가 기본 urllib User-Agent(Python-urllib/3.x)를 error 1010 으로
+# 막습니다. API 키와 무관하게 403 이 납니다. 검색과 다운로드 양쪽 모두
+# 브라우저 UA 를 보내야 통과합니다.
+BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+
 # 세로 쇼츠용. 가로 영상을 크롭하면 인물이 잘리므로 세로를 우선합니다.
 MIN_WIDTH = 720
 MIN_HEIGHT = 1280
@@ -152,12 +158,19 @@ def cmd_setup() -> None:
 
 def api_get(endpoint: str, params: dict, key: str) -> dict:
     url = f"{API}/{endpoint}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers={"Authorization": key})
+    req = urllib.request.Request(url, headers={
+        "Authorization": key,
+        "User-Agent": BROWSER_UA,
+    })
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
+        if exc.code == 403:
+            sys.exit("Pexels 가 403 을 냈습니다 (Cloudflare 차단일 가능성이 큽니다).\n"
+                     "  키 문제가 아니라 User-Agent 문제입니다. 스크립트가 최신인지 확인하세요.\n"
+                     f"  응답: {body[:200]}")
         if exc.code == 401:
             sys.exit("Pexels API 키가 유효하지 않습니다. 키 파일을 확인하세요.")
         if exc.code == 429:
@@ -216,7 +229,7 @@ def search(query: str, key: str, limit: int, min_seconds: float) -> list[dict]:
 
 def download(item: dict, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(item["download_url"], headers={"User-Agent": "hermes-shorts/1.0"})
+    req = urllib.request.Request(item["download_url"], headers={"User-Agent": BROWSER_UA})
     with urllib.request.urlopen(req, timeout=120) as resp, open(out_path, "wb") as fh:
         shutil.copyfileobj(resp, fh)
 
