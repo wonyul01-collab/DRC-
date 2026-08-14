@@ -71,6 +71,27 @@ hermes config set ADOPS_HOME /opt/data/adops-repo
 cp config/config.example.yaml config/config.yaml
 ```
 
+### PyYAML 이 없는 환경이라면 — JSON 을 쓴다
+
+슬림 컨테이너에는 PyYAML 이 없는 경우가 많고, PEP 668(externally-managed)
+때문에 시스템 파이썬에 바로 설치도 안 된다. 이때 가상환경을 만들어 우회하면
+이후 모든 명령이 `.venv/bin/python -m adops` 로 바뀌고, **스킬 파일에 적힌
+`python3 -m adops` 가 전부 깨진다.**
+
+가상환경을 만들지 말고 **JSON 설정을 쓴다.**
+
+```bash
+cp config/config.example.json config/config.json
+python3 -m adops doctor          # 추가 설치 없이 그대로 동작
+```
+
+설정 로더는 `config.yaml` 을 먼저 찾되, PyYAML 이 없으면 같은 위치의
+`config.json` 으로 자동 폴백한다. 둘 다 있어도 무방하다.
+
+`_` 로 시작하는 키(`_README`, `_comment_*`)는 JSON 에 주석을 쓸 수 없어서
+넣어둔 설명이며 프로그램이 무시한다. 항목별 상세 설명은
+`config.example.yaml` 의 주석을 참고한다.
+
 **가장 먼저 맞춰야 할 두 가지.** 이게 틀리면 리포트의 모든 판정이 무의미하다.
 
 | 항목 | 어디서 확인 | 왜 중요한가 |
