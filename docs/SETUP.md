@@ -154,10 +154,33 @@ data/raw/
 
 ## 4. 스킬 설치
 
+### 경로를 추측하지 말 것
+
+설치 형태에 따라 스킬 경로가 다르다. 문서에서 흔히 보이는
+`~/.hermes/skills/` 가 맞지 않는 설치본이 있다. 먼저 확인한다.
+
 ```bash
-mkdir -p ~/.hermes/skills/ecommerce
-cp -r skills/ad-daily-report   ~/.hermes/skills/ecommerce/
-cp -r skills/ad-monthly-close  ~/.hermes/skills/ecommerce/
+echo "HERMES_HOME=$HERMES_HOME"
+df -h "$HERMES_HOME" /opt/hermes 2>/dev/null
+```
+
+도커 설치본의 실제 배치 예시:
+
+| 경로 | 파일시스템 | 재시작 후 |
+|---|---|---|
+| `$HERMES_HOME/skills/` (예: `/opt/data/skills/`) | 별도 마운트된 영속 볼륨 | **유지됨** |
+| `/opt/hermes/skills/` | overlay (컨테이너 이미지 레이어), 쓰기 불가 | **초기화됨** |
+
+**영속 볼륨 쪽에 넣어야 한다.** overlay 쪽에 넣으면 오늘은 정상 동작하다가
+컨테이너 재시작 후 스킬이 사라지고, 크론이 "스킬 없음"으로 조용히 실패한다.
+가장 늦게 발견되는 종류의 고장이다.
+
+### 복사
+
+```bash
+mkdir -p "$HERMES_HOME/skills"
+cp -r skills/ad-daily-report  "$HERMES_HOME/skills/"
+cp -r skills/ad-monthly-close "$HERMES_HOME/skills/"
 ```
 
 채팅창에서 재스캔:
@@ -168,6 +191,12 @@ cp -r skills/ad-monthly-close  ~/.hermes/skills/ecommerce/
 ```
 
 목록에 두 스킬이 보이면 `/ad-daily-report` 로 수동 실행할 수 있다.
+
+### 저장소를 업데이트했다면 다시 복사해야 한다
+
+스킬은 저장소에서 **복사**된 사본이다. `git pull` 로 `skills/` 가 바뀌어도
+설치된 스킬은 그대로다. 저장소를 갱신했으면 위 복사 명령을 다시 실행하고
+`/reload-skills` 한다.
 
 ---
 
