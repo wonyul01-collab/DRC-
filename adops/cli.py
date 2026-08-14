@@ -105,13 +105,30 @@ def cmd_report(args) -> int:
         an.write(pack, out)
 
     # Hermes가 작성한 해석을 본문에 끼워 넣는다.
-    if args.commentary and Path(args.commentary).exists():
-        pack["commentary"] = Path(args.commentary).read_text(encoding="utf-8")
+    #
+    # 파일이 없으면 조용히 건너뛰지 않고 실패시킨다. 예전에는 건너뛰었는데,
+    # 그러면 해석이 통째로 빠진 리포트가 정상인 것처럼 생성되어 그대로
+    # 발송된다. 숫자만 있고 개선방안이 없는 리포트는 목적을 잃는다.
+    if args.commentary:
+        cpath = Path(args.commentary)
+        if not cpath.exists():
+            print(f"오류: 코멘터리 파일이 없습니다 — {cpath}\n"
+                  f"      쓰기 권한이 막힌 경로에 작성하려 했을 수 있습니다. "
+                  f"저장소 안(out/)에 쓰세요.", file=sys.stderr)
+            return 2
+        text = cpath.read_text(encoding="utf-8").strip()
+        if not text:
+            print(f"오류: 코멘터리 파일이 비어 있습니다 — {cpath}", file=sys.stderr)
+            return 2
+        pack["commentary"] = text
 
     html = rp.render(pack)
     path = out / f"report-{pack['mode']}-{pack['as_of']}.html"
     path.write_text(html, encoding="utf-8")
     print(str(path))
+    # 코멘터리 포함 여부를 눈에 보이게 남긴다. 없이 생성됐는데 모르고
+    # 발송하는 일을 막기 위한 신호다.
+    print("코멘터리: " + ("포함됨" if pack.get("commentary") else "없음 (숫자만)"))
     return 0
 
 

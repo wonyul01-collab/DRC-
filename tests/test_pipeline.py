@@ -214,6 +214,63 @@ class TestIdempotentIngest(unittest.TestCase):
         self.assertEqual(total, 1000)
 
 
+class TestCommentaryGate(unittest.TestCase):
+    """코멘터리가 빠진 채 리포트가 조용히 만들어지면 안 된다.
+
+    에이전트의 쓰기 권한이 막혀 파일이 생성되지 않았는데도 리포트는
+    정상 생성되어, 해석 없는 리포트가 그대로 발송된 사고가 있었다.
+    """
+
+    def setUp(self):
+        import tempfile
+        from adops import cli
+        self.cli = cli
+        self.tmp = tempfile.mkdtemp()
+        conn = make_conn()
+        wh.upsert(conn, [SpendRow(
+            date="2026-08-13", ad_channel="naver_sa", store_channel="smartstore",
+            campaign="c", keyword="k", clicks=10, cost=10000,
+            conv_count=1, conv_value=40000)])
+        wh.upsert(conn, [SalesRow(date="2026-08-13", store_channel="smartstore",
+                                  sku="A", orders=1, gross_sales=40000)])
+        self.db = str(Path(self.tmp) / "t.db")
+        with wh.connect(self.db) as c2:
+            wh.upsert(c2, [SpendRow(
+                date="2026-08-13", ad_channel="naver_sa",
+                store_channel="smartstore", campaign="c", keyword="k",
+                clicks=10, cost=10000, conv_count=1, conv_value=40000)])
+            wh.upsert(c2, [SalesRow(date="2026-08-13",
+                                    store_channel="smartstore", sku="A",
+                                    orders=1, gross_sales=40000)])
+
+    def _run(self, extra):
+        return self.cli.main(["--db", self.db, "report", "--date", "2026-08-13",
+                              "--out", self.tmp] + extra)
+
+    def test_missing_commentary_file_fails(self):
+        rc = self._run(["--commentary", str(Path(self.tmp) / "nope.html")])
+        self.assertEqual(rc, 2)
+
+    def test_empty_commentary_file_fails(self):
+        p = Path(self.tmp) / "empty.html"
+        p.write_text("   \n", encoding="utf-8")
+        rc = self._run(["--commentary", str(p)])
+        self.assertEqual(rc, 2)
+
+    def test_present_commentary_is_embedded(self):
+        p = Path(self.tmp) / "c.html"
+        p.write_text("<div>해석 본문</div>", encoding="utf-8")
+        rc = self._run(["--commentary", str(p)])
+        self.assertEqual(rc, 0)
+        html = (Path(self.tmp) / "report-daily-2026-08-13.html").read_text(
+            encoding="utf-8")
+        self.assertIn("해석 본문", html)
+
+    def test_no_commentary_flag_is_allowed(self):
+        """--commentary 를 아예 안 주면 숫자만 있는 리포트도 정상이다."""
+        self.assertEqual(self._run([]), 0)
+
+
 class TestEndToEnd(unittest.TestCase):
     """팩 생성 → HTML 렌더까지 예외 없이 통과하는지."""
 

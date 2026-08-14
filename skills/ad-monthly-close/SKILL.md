@@ -79,7 +79,17 @@ prerequisites:
 
 ## 절차 — 3단계: 종합 및 발송
 
-6. 코멘터리를 작성한다. 일일 리포트보다 길어도 되지만, 아래 구조를 지킨다:
+6. 코멘터리를 **저장소 안**에 작성한다:
+
+   ```
+   $ADOPS_HOME/out/commentary-monthly-<날짜>.html
+   ```
+
+   **`/tmp` 등 저장소 밖에 쓰지 마라.** 쓰기가 `HERMES_WRITE_SAFE_ROOT`
+   (보통 `/opt/data`) 안으로 제한되어 조용히 거부되고, 해석이 빠진 채로
+   리포트가 만들어진다. 작성 후 `ls -l` 로 파일 존재를 확인한다.
+
+   일일 리포트보다 길어도 되지만, 아래 구조를 지킨다:
 
    ```html
    <div style="font-size:13px;line-height:1.7">
@@ -106,10 +116,14 @@ prerequisites:
 
 7. 리포트 생성 및 발송:
    ```bash
-   python3 -m adops report --date "$(date +%F)" --mode monthly \
-     --pack "out/pack-monthly-$(date +%F).json" \
-     --commentary /tmp/adops-monthly-commentary.html
+   D="$(date +%F)"
+   python3 -m adops report --date "$D" --mode monthly \
+     --pack "out/pack-monthly-$D.json" \
+     --commentary "out/commentary-monthly-$D.html"
    ```
+
+   출력 마지막 줄이 `코멘터리: 포함됨` 이어야 한다. `없음 (숫자만)` 이면
+   6단계의 파일 쓰기가 거부된 것이므로 발송하지 않는다.
    제목: `[월마감] {전월} 광고·매출 결산 · 실매출 {금액} · 전월비 {증감}`
 
 ## 함정

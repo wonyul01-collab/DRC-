@@ -86,7 +86,16 @@ prerequisites:
    f. `trends.monthly` 와 `trends.keyword_monthly` — 올해 흐름. 오늘 숫자가
       추세 안에서 정상 범위인지 판단하는 근거.
 
-6. **코멘터리 작성.** 아래 형식의 HTML 조각을 `/tmp/adops-commentary.html`에 쓴다.
+6. **코멘터리 작성.** 아래 형식의 HTML 조각을 **저장소 안**에 쓴다:
+
+   ```
+   $ADOPS_HOME/out/commentary-daily-<날짜>.html
+   ```
+
+   **`/tmp` 등 저장소 밖에 쓰지 마라.** 쓰기가 `HERMES_WRITE_SAFE_ROOT`
+   (보통 `/opt/data`) 안으로 제한되어 있어 조용히 거부된다. 거부되면
+   해석이 빠진 채로 리포트가 만들어진다.
+
    `<style>`이나 `<script>`는 쓰지 마라(메일에서 제거된다). 인라인 스타일만.
 
    ```html
@@ -109,10 +118,15 @@ prerequisites:
 
 7. **리포트 생성 및 발송.**
    ```bash
-   python3 -m adops report --date "$(date -d yesterday +%F)" \
-     --pack "out/pack-daily-$(date -d yesterday +%F).json" \
-     --commentary /tmp/adops-commentary.html
+   D="$(date -d yesterday +%F)"
+   python3 -m adops report --date "$D" \
+     --pack "out/pack-daily-$D.json" \
+     --commentary "out/commentary-daily-$D.html"
    ```
+
+   출력의 마지막 줄에 `코멘터리: 포함됨` 이 찍혀야 한다. `없음 (숫자만)`
+   이거나 명령이 실패하면 6단계의 파일 쓰기가 거부된 것이다. 그 상태로
+   발송하지 마라.
    생성된 HTML 파일을 본문으로 하여 메일 발송한다. 제목:
    `[광고 리포트] {날짜} · 실매출 {금액} · 공헌이익 {금액}`
 
@@ -138,11 +152,20 @@ prerequisites:
   침묵하는 것이 잘못된 숫자를 보내는 것보다 낫다는 말은 여기선 틀렸다 —
   아무것도 안 오면 사용자는 문제를 모른다.
 
+- **파일을 썼다고 스스로 단정하지 마라.** 쓰기 경로가 샌드박스 밖이면
+  거부되는데, 도구 호출 자체는 성공한 것처럼 보일 수 있다. 코멘터리를
+  작성한 뒤에는 반드시 파일이 실제로 존재하는지 확인하고 넘어간다:
+  ```bash
+  ls -l "out/commentary-daily-$D.html"
+  ```
+
 ## 검증
 
 발송 전 다음을 확인한다:
 
 - [ ] `data_quality.gaps`를 확인했고, 결손이 있으면 리포트 상단에 경고가 있다
+- [ ] 코멘터리 파일이 **실제로 존재한다** (`ls -l` 로 확인, 크기 0 아님)
+- [ ] `report` 출력 마지막 줄이 `코멘터리: 포함됨` 이다
 - [ ] 코멘터리의 모든 숫자가 팩에서 그대로 인용된 것이다 (직접 계산한 것 없음)
 - [ ] 조치 항목이 각각 "무엇을, 얼마나, 언제까지"를 담고 있다
 - [ ] 추정과 사실이 문장에서 구분되어 있다
