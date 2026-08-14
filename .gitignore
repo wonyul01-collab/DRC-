@@ -1,0 +1,19 @@
+# 대외비 — 원가·마진·수수료율·목표 매출이 들어간다
+config/config.yaml
+config/config.json
+.env
+*.env
+
+# 데이터
+data/adops.db
+data/raw/**
+!data/raw/.gitkeep
+
+# 생성물
+out/
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+venv/
