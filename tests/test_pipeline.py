@@ -119,6 +119,82 @@ class TestSkuMapping(unittest.TestCase):
         self.assertEqual(csv_source.classify(f)[0][0], "sku_map")
 
 
+class TestAutomap(unittest.TestCase):
+    """상품명 대조로 매핑을 자동 생성한다. 다만 '콜라겐 30포'와 '60포'는
+    이름이 90% 넘게 같아도 다른 상품이다. 잘못 묶으면 원가가 통째로
+    틀어져 수익성 판정이 어긋난다."""
+
+    def setUp(self):
+        from adops import automap
+        self.am = automap
+
+    def test_promo_noise_removed(self):
+        self.assertEqual(
+            self.am.normalize("[무료배송] 프리미엄 콜라겐 30포 (정품)"),
+            self.am.normalize("프리미엄콜라겐 30포"))
+
+    def test_quantity_extracted(self):
+        self.assertEqual(self.am.qty_signature("콜라겐 30포"), frozenset({(30.0, "포")}))
+        self.assertEqual(self.am.qty_signature("비타민D 90정"), frozenset({(90.0, "정")}))
+
+    def test_different_quantity_never_matches(self):
+        a = self.am.Item("smartstore", "1", "프리미엄 콜라겐 30포", 39000)
+        b = self.am.Item("coupang", "2", "프리미엄 콜라겐 60포", 59000)
+        score, why = self.am.score_pair(a, b)
+        self.assertEqual(score, 0.0)
+        self.assertIn("수량 불일치", why)
+
+    def test_same_product_across_channels_matches(self):
+        a = self.am.Item("smartstore", "1", "[무료배송] 프리미엄 콜라겐 30포 (정품)", 39000)
+        b = self.am.Item("coupang", "2", "프리미엄 콜라겐 30포", 38500)
+        score, _ = self.am.score_pair(a, b)
+        self.assertGreaterEqual(score, 0.85)
+
+    def test_same_channel_never_pairs(self):
+        a = self.am.Item("coupang", "1", "콜라겐 30포", 39000)
+        b = self.am.Item("coupang", "2", "콜라겐 30포", 39000)
+        self.assertEqual(self.am.score_pair(a, b)[0], 0.0)
+
+    def test_groups_span_channels_only(self):
+        items = [
+            self.am.Item("smartstore", "S1", "프리미엄 콜라겐 30포", 39000),
+            self.am.Item("coupang", "C1", "[로켓] 프리미엄 콜라겐 30포", 38500),
+            self.am.Item("smartstore", "S2", "프리미엄 콜라겐 60포", 59000),
+            self.am.Item("coupang", "C2", "프리미엄 콜라겐 60포", 58000),
+        ]
+        groups, _ = self.am.build_groups(items)
+        by_code = {frozenset(i.code for i in g) for g in groups}
+        self.assertIn(frozenset({"S1", "C1"}), by_code)
+        self.assertIn(frozenset({"S2", "C2"}), by_code)
+
+    def test_existing_catalog_sku_is_reused(self):
+        """새 번호를 붙이면 이미 입력한 원가가 연결되지 않고 버려진다."""
+        catalog = {"SKU-1001": self.am.Item("catalog", "SKU-1001",
+                                            "프리미엄 콜라겐 30포", 39000)}
+        group = [self.am.Item("smartstore", "S1", "[무료배송] 프리미엄 콜라겐 30포", 39000),
+                 self.am.Item("coupang", "C1", "프리미엄 콜라겐 30포", 38500)]
+        sku, why = self.am.assign_sku(group, catalog, [1])
+        self.assertEqual(sku, "SKU-1001")
+        self.assertIn("카탈로그", why)
+
+    def test_new_sku_when_not_in_catalog(self):
+        group = [self.am.Item("smartstore", "S9", "신제품 오메가3 60캡슐", 32000),
+                 self.am.Item("coupang", "C9", "신제품 오메가3 60캡슐", 31500)]
+        sku, why = self.am.assign_sku(group, {}, [5])
+        self.assertEqual(sku, "SKU-0006")
+        self.assertEqual(why, "신규 부여")
+
+    def test_catalog_match_respects_quantity(self):
+        """카탈로그 대조에서도 수량이 다르면 붙이지 않는다."""
+        catalog = {"SKU-1001": self.am.Item("catalog", "SKU-1001",
+                                            "프리미엄 콜라겐 30포", 39000)}
+        group = [self.am.Item("smartstore", "S2", "프리미엄 콜라겐 60포", 59000),
+                 self.am.Item("coupang", "C2", "프리미엄 콜라겐 60포", 58000)]
+        sku, why = self.am.assign_sku(group, catalog, [1])
+        self.assertNotEqual(sku, "SKU-1001")
+        self.assertEqual(why, "신규 부여")
+
+
 class TestClassify(unittest.TestCase):
     """폴더가 아홉 개라 손으로 넣다 보면 틀린다. 잘못 넣으면 그 채널만
     빠진 리포트가 조용히 나가므로, 헤더로 판별해준다."""

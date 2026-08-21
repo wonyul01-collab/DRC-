@@ -17,8 +17,8 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
-from ..schema import (CatalogRow, SalesRow, SearchTermRow, SkuMapRow,
-                      SpendRow)
+from ..schema import (CatalogRow, ProductRow, SalesRow, SearchTermRow,
+                      SkuMapRow, SpendRow)
 from .base import FetchResult, Source, integer, num
 
 
@@ -157,6 +157,36 @@ PROFILES: dict[str, dict[str, Any]] = {
             "new_customer_orders": ["신규주문수", "신규고객주문", "new orders"],
         },
     },
+    "products_smartstore": {
+        "table": "products",
+        "constants": {"channel": "smartstore"},
+        "columns": {
+            "code": ["상품번호", "옵션ID", "노출상품ID", "상품코드", "옵션코드",
+                     "판매자상품코드", "product id", "code", "sku"],
+            "name": ["상품명", "등록상품명", "노출상품명", "product name", "name"],
+            "price": ["판매가", "정상가", "할인가", "가격", "price"],
+        },
+    },
+    "products_coupang": {
+        "table": "products",
+        "constants": {"channel": "coupang"},
+        "columns": {
+            "code": ["상품번호", "옵션ID", "노출상품ID", "상품코드", "옵션코드",
+                     "판매자상품코드", "product id", "code", "sku"],
+            "name": ["상품명", "등록상품명", "노출상품명", "product name", "name"],
+            "price": ["판매가", "정상가", "할인가", "가격", "price"],
+        },
+    },
+    "products_own": {
+        "table": "products",
+        "constants": {"channel": "own"},
+        "columns": {
+            "code": ["상품번호", "옵션ID", "노출상품ID", "상품코드", "옵션코드",
+                     "판매자상품코드", "product id", "code", "sku"],
+            "name": ["상품명", "등록상품명", "노출상품명", "product name", "name"],
+            "price": ["판매가", "정상가", "할인가", "가격", "price"],
+        },
+    },
     "sku_map": {
         "table": "sku_map",
         "constants": {},
@@ -259,7 +289,7 @@ def classify(path: Path) -> list[tuple[str, float, list[str]]]:
         # 표를 구분하는 결정적 컬럼. 이게 없으면 후보에서 뺀다.
         required = {"spend": "cost", "sales": "gross_sales",
                     "search_terms": "search_term", "catalog": "sku",
-                    "sku_map": "external_id"}[spec["table"]]
+                    "sku_map": "external_id", "products": "code"}[spec["table"]]
         if required not in colmap:
             continue
         # 검색어 보고서는 광고 보고서와 컬럼이 거의 겹친다. search_term 유무로 가른다.
@@ -340,7 +370,8 @@ class CsvSource(Source):
 
             required = {"spend": ["cost"], "sales": ["gross_sales"],
                         "search_terms": ["search_term"], "catalog": ["sku"],
-                        "sku_map": ["external_id", "sku"]}[table]
+                        "sku_map": ["external_id", "sku"],
+                        "products": ["code", "name"]}[table]
             missing = [c for c in required if c not in colmap]
             if missing:
                 warnings.append(
@@ -440,6 +471,15 @@ class CsvSource(Source):
                 cost=num(val("cost")),
                 conv_count=num(val("conv_count")),
                 conv_value=num(val("conv_value")),
+            )
+
+        if table == "products":
+            code = str(val("code") or "").strip()
+            if not code:
+                return None
+            return ProductRow(
+                channel=consts["channel"], code=code,
+                name=str(val("name") or "").strip(), price=num(val("price")),
             )
 
         if table == "sku_map":

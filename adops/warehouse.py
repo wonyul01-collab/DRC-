@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
-from .schema import (CatalogRow, SalesRow, SearchTermRow, SkuMapRow,
-                     SpendRow, to_dict)
+from .schema import (CatalogRow, ProductRow, SalesRow, SearchTermRow,
+                     SkuMapRow, SpendRow, to_dict)
 
 
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "adops.db"
@@ -88,6 +88,16 @@ CREATE TABLE IF NOT EXISTS catalog (
     category TEXT NOT NULL DEFAULT '',
     stock_qty INTEGER,
     active INTEGER NOT NULL DEFAULT 1
+);
+
+-- 채널 관리자에서 내려받은 상품 목록. 매출 데이터의 상품명만으로는 아직
+-- 안 팔린 신상품이 빠지므로, 목록을 따로 받아 매핑을 미리 만들어둔다.
+CREATE TABLE IF NOT EXISTS products (
+    channel TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    price REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (channel, code)
 );
 
 -- 채널별 상품코드 → 통합 SKU. 채널마다 코드 체계가 달라서, 이 표가 없으면
@@ -248,6 +258,10 @@ _UPSERT = {
         "INSERT OR REPLACE INTO sku_map (channel,external_id,sku,note) "
         "VALUES (:channel,:external_id,:sku,:note)"
     ),
+    "products": (
+        "INSERT OR REPLACE INTO products (channel,code,name,price) "
+        "VALUES (:channel,:code,:name,:price)"
+    ),
 }
 
 _TABLE_OF = {
@@ -256,6 +270,7 @@ _TABLE_OF = {
     SearchTermRow: "search_terms",
     CatalogRow: "catalog",
     SkuMapRow: "sku_map",
+    ProductRow: "products",
 }
 
 

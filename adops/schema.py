@@ -133,6 +133,24 @@ class CatalogRow:
 
 
 @dataclass(slots=True)
+class ProductRow:
+    """채널 관리자에서 내려받은 상품 목록.
+
+    매출 데이터에도 상품명이 있지만, 그것만으로는 아직 안 팔린 신상품이
+    빠진다. 목록을 따로 받아두면 매핑을 미리 만들어둘 수 있다.
+    """
+
+    channel: str
+    code: str
+    name: str = ""
+    price: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.channel = (self.channel or "").strip()
+        self.code = str(self.code or "").strip()
+
+
+@dataclass(slots=True)
 class SkuMapRow:
     """채널별 상품코드 → 통합 SKU 매핑.
 
@@ -161,6 +179,7 @@ ROW_TYPES = {
     "search_terms": SearchTermRow,
     "catalog": CatalogRow,
     "sku_map": SkuMapRow,
+    "products": ProductRow,
 }
 
 

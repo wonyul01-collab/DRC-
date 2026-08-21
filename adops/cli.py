@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -202,6 +203,105 @@ def cmd_daily(args) -> int:
     if not args.mail:
         return 0
     return _send(pack, path, args)
+
+
+def cmd_automap(args) -> int:
+    """채널별 상품 목록을 상품명으로 대조해 통합 SKU 매핑을 자동 생성한다.
+
+    상품이 수백 개면 손으로 짝지을 수 없다. 이름이 대체로 비슷하므로
+    그것으로 후보를 찾되, 수량·용량이 다르면(30포 vs 60포) 짝짓지 않는다.
+    잘못 묶으면 원가가 통째로 틀어져 수익성 판정이 어긋나기 때문이다.
+
+    확신이 낮은 짝은 자동 확정하지 않고 사람이 볼 목록으로 넘긴다.
+    """
+    import csv as _csv
+    from . import automap as am
+
+    with wh.connect(args.db) as conn:
+        items = am.collect_items(conn)
+        # 카탈로그의 기존 SKU 와 상품명. 이미 원가를 입력해 둔 상품이면
+        # 그 SKU 를 재사용해야 원가가 연결된다.
+        catalog = {
+            r["sku"]: am.Item("catalog", r["sku"], r["product_name"] or "",
+                              float(r["price"] or 0))
+            for r in conn.execute(
+                "SELECT sku, product_name, price FROM catalog")
+        }
+
+    if not items:
+        print("상품 정보가 없습니다. 상품 목록이나 매출 데이터를 먼저 적재하세요.",
+              file=sys.stderr)
+        print("  상품 목록 폴더: data/raw/products_smartstore, products_coupang, "
+              "products_own", file=sys.stderr)
+        return 2
+
+    by_channel: dict[str, int] = {}
+    for it in items:
+        by_channel[it.channel] = by_channel.get(it.channel, 0) + 1
+    print("대조 대상:", ", ".join(f"{k} {v}개" for k, v in sorted(by_channel.items())))
+    if len(by_channel) < 2:
+        print("\n채널이 하나뿐이라 대조할 상대가 없습니다.", file=sys.stderr)
+        print("다른 채널의 상품 목록도 넣어주세요.", file=sys.stderr)
+        return 2
+
+    groups, review = am.build_groups(items, threshold=args.threshold)
+
+    counter = [0]
+    # 새로 만드는 SKU 번호가 기존과 겹치지 않게 시작점을 뒤로 민다.
+    for sku in catalog:
+        m = re.match(r"SKU-(\d+)$", sku)
+        if m:
+            counter[0] = max(counter[0], int(m.group(1)))
+
+    rows, matched_groups, reused = [], 0, 0
+    for g in sorted(groups, key=lambda g: -len(g)):
+        channels = {i.channel for i in g}
+        if len(channels) < 2:
+            continue                       # 짝을 못 찾은 단일 채널 상품
+        matched_groups += 1
+        sku, why = am.assign_sku(g, catalog, counter)
+        if why != "신규 부여":
+            reused += 1
+        for it in sorted(g, key=lambda x: x.channel):
+            rows.append([it.channel, it.code, sku, f"{it.name} [{why}]"])
+
+    out = Path(args.out or "sku_map_자동생성.csv")
+    with out.open("w", encoding="utf-8-sig", newline="") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["채널", "채널상품코드", "통합SKU", "비고"])
+        w.writerows(rows)
+
+    print(f"\n자동 매칭: {matched_groups}개 상품군 / {len(rows)}개 코드")
+    print(f"  기존 카탈로그 SKU 재사용 {reused}개, 신규 부여 "
+          f"{matched_groups - reused}개")
+    print(f"  → {out}")
+
+    if review:
+        rp_path = out.with_name(out.stem + "_검토필요.csv")
+        with rp_path.open("w", encoding="utf-8-sig", newline="") as fh:
+            w = _csv.writer(fh)
+            w.writerow(["유사도", "채널A", "코드A", "상품명A",
+                        "채널B", "코드B", "상품명B", "판단근거"])
+            for pr in review[:200]:
+                w.writerow([f"{pr.score*100:.0f}%",
+                            pr.left.channel, pr.left.code, pr.left.name,
+                            pr.right.channel, pr.right.code, pr.right.name,
+                            pr.reason])
+        print(f"\n확신이 낮아 보류한 짝 {len(review)}건 → {rp_path}")
+        print("  같은 상품이 맞으면 자동생성 파일에 같은 통합SKU로 추가하세요.")
+
+    unmatched = [g[0] for g in groups if len({i.channel for i in g}) < 2]
+    if unmatched:
+        print(f"\n짝을 못 찾은 상품 {len(unmatched)}개 "
+              f"(한 채널에만 있거나 이름이 크게 다름)")
+        for it in unmatched[:5]:
+            print(f"  {it.channel:<11} {it.code:<16} {it.name[:30]}")
+
+    print()
+    print("확인 후 data/raw/sku_map/ 에 넣고 다시 적재하면 적용됩니다.")
+    print("  주의: 자동 매칭 결과를 그대로 믿지 말고, 상품명이 실제로 같은")
+    print("        상품인지 훑어보세요. 잘못 묶이면 원가가 틀어집니다.")
+    return 0
 
 
 def cmd_skumap(args) -> int:
@@ -440,6 +540,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="발송 없이 생성만")
     g.add_argument("--dry-run", action="store_true")
     g.set_defaults(func=cmd_daily, commentary=None, pack=None)
+
+    g = sub.add_parser("automap", help="상품명으로 통합 SKU 매핑 자동 생성")
+    g.add_argument("--out", help="저장할 파일명 (기본 sku_map_자동생성.csv)")
+    g.add_argument("--threshold", type=float, default=0.72,
+                   help="후보로 볼 최소 유사도 (기본 0.72)")
+    g.set_defaults(func=cmd_automap)
 
     g = sub.add_parser("skumap", help="매핑이 필요한 상품코드를 서식으로 추출")
     g.add_argument("--out", help="저장할 파일명 (기본 sku_map_작성용.csv)")
