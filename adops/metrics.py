@@ -140,13 +140,17 @@ def channel_margin_rates(conn: sqlite3.Connection, cfg: Config) -> dict[str, flo
 
     카탈로그에 원가가 있는 SKU는 실제 판매 구성비로 가중평균하고,
     원가가 없으면 설정의 기본 마진율로 메운다.
+
+    채널마다 상품코드 체계가 달라서 sku_map 을 거쳐 통합 SKU 로 바꾼 뒤
+    카탈로그와 대조한다. 매핑이 없으면 원본 코드를 그대로 쓴다.
     """
     default_gm = float(cfg.get("default_gross_margin_rate", 0.45))
     sql = (
         "SELECT s.store_channel ch, SUM(s.net_sales) rev, "
         "SUM(CASE WHEN c.price > 0 THEN s.net_sales * (c.price - c.cogs)/c.price "
         "         ELSE s.net_sales * ? END) profit "
-        "FROM sales s LEFT JOIN catalog c ON c.sku = s.sku "
+        "FROM sales s LEFT JOIN catalog c "
+        "  ON c.sku = canon_sku(s.store_channel, s.sku) "
         "GROUP BY s.store_channel"
     )
     out: dict[str, float] = {}

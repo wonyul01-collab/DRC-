@@ -31,7 +31,8 @@ def wasted_on_dead_skus(
         "SELECT s.ad_channel, s.campaign, s.sku, c.product_name, "
         "c.stock_qty, c.active, SUM(s.cost) cost, SUM(s.clicks) clicks, "
         "SUM(s.conv_count) conv "
-        "FROM spend s JOIN catalog c ON c.sku = s.sku "
+        "FROM spend s JOIN catalog c "
+        "  ON c.sku = canon_sku(s.store_channel, s.sku) "
         "WHERE s.date BETWEEN ? AND ? AND (c.active = 0 OR c.stock_qty = 0) "
         "GROUP BY s.ad_channel, s.campaign, s.sku HAVING SUM(s.cost) > 0 "
         "ORDER BY cost DESC",
@@ -232,22 +233,23 @@ def sku_focus(
     광고비만 먹는 SKU는 정리 대상이다.
     """
     start = shift(end, -(lookback - 1))
+    # 채널별 코드를 통합 SKU 로 묶어야 같은 상품의 매출과 광고비가 합쳐진다.
     sales = {
         r["sku"]: {
             "sku": r["sku"], "product_name": r["name"],
             "revenue": float(r["v"] or 0), "qty": int(r["q"] or 0),
         }
         for r in conn.execute(
-            "SELECT sku, MAX(product_name) name, "
+            "SELECT canon_sku(store_channel, sku) sku, MAX(product_name) name, "
             "SUM(net_sales)-SUM(cancels)-SUM(returns) v, SUM(qty) q "
             "FROM sales WHERE date BETWEEN ? AND ? AND sku != '' "
-            "GROUP BY sku", (start, end))
+            "GROUP BY 1", (start, end))
     }
     ad = {
         r["sku"]: float(r["c"] or 0)
         for r in conn.execute(
-            "SELECT sku, SUM(cost) c FROM spend WHERE date BETWEEN ? AND ? "
-            "AND sku IS NOT NULL AND sku != '' GROUP BY sku", (start, end))
+            "SELECT canon_sku(store_channel, sku) sku, SUM(cost) c FROM spend "
+            "WHERE date BETWEEN ? AND ? AND sku != '' GROUP BY 1", (start, end))
     }
     if not sales:
         return {"unadvertised_winners": [], "overspent_losers": [],

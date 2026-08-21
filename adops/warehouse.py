@@ -13,7 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
-from .schema import CatalogRow, SalesRow, SearchTermRow, SpendRow, to_dict
+from .schema import (CatalogRow, SalesRow, SearchTermRow, SkuMapRow,
+                     SpendRow, to_dict)
 
 
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "adops.db"
@@ -88,6 +89,17 @@ CREATE TABLE IF NOT EXISTS catalog (
     stock_qty INTEGER,
     active INTEGER NOT NULL DEFAULT 1
 );
+
+-- 채널별 상품코드 → 통합 SKU. 채널마다 코드 체계가 달라서, 이 표가 없으면
+-- 한 채널에만 원가가 붙고 나머지는 전부 기본 마진율로 추정된다.
+CREATE TABLE IF NOT EXISTS sku_map (
+    channel TEXT NOT NULL DEFAULT '*',
+    external_id TEXT NOT NULL,
+    sku TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (channel, external_id)
+);
+CREATE INDEX IF NOT EXISTS ix_skumap_ext ON sku_map(external_id);
 
 -- 적재 이력. '어제 데이터가 안 들어왔는데 리포트는 정상으로 보이는' 사고를
 -- 막기 위해, 리포트는 매번 이 표를 확인해 결손을 먼저 경고한다.
@@ -164,6 +176,7 @@ def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(SCHEMA_SQL)
+        register_sku_map(conn)
         removed = migrate(conn)
         if removed:
             import sys
@@ -173,6 +186,36 @@ def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
         conn.commit()
     finally:
         conn.close()
+
+
+def register_sku_map(conn: sqlite3.Connection) -> int:
+    """canon_sku(채널, 원본코드) SQL 함수를 등록한다.
+
+    적재 시점이 아니라 조회 시점에 해석한다. 나중에 매핑을 추가하면
+    과거 데이터에도 즉시 적용되고, 원본 코드는 그대로 보존된다.
+    다시 내려받아 재적재할 필요가 없다.
+
+    등록된 매핑 수를 반환한다.
+    """
+    mapping: dict[tuple[str, str], str] = {}
+    try:
+        rows = conn.execute("SELECT channel, external_id, sku FROM sku_map")
+    except sqlite3.OperationalError:
+        rows = []
+    for r in rows:
+        mapping[(r["channel"], r["external_id"])] = r["sku"]
+
+    def canon(channel, raw):
+        if not raw:
+            return ""
+        raw = str(raw).strip()
+        # 채널 지정 매핑이 우선, 없으면 전채널(*) 매핑, 그것도 없으면 원본 그대로.
+        return (mapping.get((str(channel or ""), raw))
+                or mapping.get(("*", raw))
+                or raw)
+
+    conn.create_function("canon_sku", 2, canon)
+    return len(mapping)
 
 
 _UPSERT = {
@@ -201,6 +244,10 @@ _UPSERT = {
         "stock_qty,active) VALUES (:sku,:product_name,:price,:cogs,:category,"
         ":stock_qty,:active)"
     ),
+    "sku_map": (
+        "INSERT OR REPLACE INTO sku_map (channel,external_id,sku,note) "
+        "VALUES (:channel,:external_id,:sku,:note)"
+    ),
 }
 
 _TABLE_OF = {
@@ -208,6 +255,7 @@ _TABLE_OF = {
     SalesRow: "sales",
     SearchTermRow: "search_terms",
     CatalogRow: "catalog",
+    SkuMapRow: "sku_map",
 }
 
 

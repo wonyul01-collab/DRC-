@@ -17,13 +17,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from adops import analyze, keywords, metrics, opportunities, report, trends  # noqa: E402
 from adops import warehouse as wh                                            # noqa: E402
 from adops.config import Config, DEFAULTS                                    # noqa: E402
-from adops.schema import CatalogRow, SalesRow, SearchTermRow, SpendRow       # noqa: E402
+from adops.schema import (CatalogRow, SalesRow, SearchTermRow,  # noqa: E402
+                          SkuMapRow, SpendRow)
 
 
 def make_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript(wh.SCHEMA_SQL)
+    # 조회 쿼리가 canon_sku() 를 쓰므로 등록해야 한다. 실제 connect() 와 동일.
+    wh.register_sku_map(conn)
     return conn
 
 
@@ -48,6 +51,72 @@ class TestBreakevenRoas(unittest.TestCase):
         """마진이 수수료보다 낮으면 어떤 ROAS로도 흑자가 안 된다."""
         c = cfg()
         self.assertIsNone(c.bep_roas("coupang", 0.05))
+
+
+class TestSkuMapping(unittest.TestCase):
+    """채널마다 상품코드 체계가 다르다. 매핑이 없으면 한 채널에만 원가가
+    붙고 나머지는 전부 기본 마진율로 추정되어 수익성 판정이 어긋난다."""
+
+    def _conn_with_map(self):
+        conn = make_conn()
+        # 같은 상품이 채널마다 다른 코드를 쓴다
+        wh.upsert(conn, [
+            SkuMapRow("smartstore", "1234567890", "SKU-1001"),
+            SkuMapRow("coupang", "87654321", "SKU-1001"),
+            SkuMapRow("*", "P-1001", "SKU-1001"),
+        ])
+        wh.register_sku_map(conn)
+        # 원가율 40% → 매출총이익률 60% (기본값 45% 와 구분됨)
+        wh.upsert(conn, [CatalogRow(sku="SKU-1001", price=10000, cogs=4000,
+                                    stock_qty=0)])
+        return conn
+
+    def test_margin_resolves_across_channels(self):
+        conn = self._conn_with_map()
+        for ch, code in (("smartstore", "1234567890"),
+                         ("coupang", "87654321"), ("own", "P-1001")):
+            wh.upsert(conn, [SalesRow(date="2026-08-13", store_channel=ch,
+                                      sku=code, orders=1, gross_sales=10000)])
+        rates = metrics.channel_margin_rates(conn, cfg())
+        for ch in ("smartstore", "coupang", "own"):
+            self.assertAlmostEqual(rates[ch], 0.60, places=6,
+                                   msg=f"{ch} 에 원가가 대조되지 않음")
+
+    def test_unmapped_code_falls_back_to_default_margin(self):
+        conn = self._conn_with_map()
+        wh.upsert(conn, [SalesRow(date="2026-08-13", store_channel="coupang",
+                                  sku="매핑없는코드", orders=1, gross_sales=10000)])
+        self.assertAlmostEqual(
+            metrics.channel_margin_rates(conn, cfg())["coupang"], 0.45, places=6)
+
+    def test_dead_sku_detected_through_mapping(self):
+        """품절 판정도 매핑을 거쳐야 한다. 쿠팡 광고는 쿠팡 코드로 들어온다."""
+        conn = self._conn_with_map()
+        wh.upsert(conn, [SpendRow(date="2026-08-13", ad_channel="coupang_ads",
+                                  store_channel="coupang", campaign="c",
+                                  sku="87654321", clicks=10, cost=10000)])
+        out = opportunities.wasted_on_dead_skus(conn, cfg(), "2026-08-13")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["reason"], "재고 0")
+
+    def test_channel_specific_beats_wildcard(self):
+        conn = make_conn()
+        wh.upsert(conn, [SkuMapRow("*", "X1", "SKU-A"),
+                         SkuMapRow("coupang", "X1", "SKU-B")])
+        wh.register_sku_map(conn)
+        q = "SELECT canon_sku(?,?) v"
+        self.assertEqual(conn.execute(q, ("coupang", "X1")).fetchone()["v"], "SKU-B")
+        self.assertEqual(conn.execute(q, ("own", "X1")).fetchone()["v"], "SKU-A")
+
+    def test_sku_map_csv_profile_recognised(self):
+        import tempfile
+        from adops.adapters import csv_source
+        d = Path(tempfile.mkdtemp())
+        f = d / "매핑표.csv"
+        f.write_text("채널,채널상품코드,통합SKU,비고\n"
+                     "smartstore,1234567890,SKU-1001,콜라겐\n",
+                     encoding="utf-8-sig")
+        self.assertEqual(csv_source.classify(f)[0][0], "sku_map")
 
 
 class TestClassify(unittest.TestCase):

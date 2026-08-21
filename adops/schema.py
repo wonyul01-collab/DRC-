@@ -132,11 +132,35 @@ class CatalogRow:
         return (self.price - self.cogs) / self.price
 
 
+@dataclass(slots=True)
+class SkuMapRow:
+    """채널별 상품코드 → 통합 SKU 매핑.
+
+    같은 상품이라도 스마트스토어는 상품번호, 쿠팡은 옵션ID, 자사몰은
+    자체 코드를 쓴다. 매핑이 없으면 채널 하나에만 원가가 붙고 나머지는
+    전부 기본 마진율로 추정되어 수익성 판정이 어긋난다.
+
+    channel 이 '*' 이면 모든 채널에 적용한다. 코드 체계가 겹치지 않는
+    경우 채널을 일일이 적지 않아도 되게 하려는 것이다.
+    """
+
+    channel: str            # smartstore / coupang / own / coupang_ads / google / *
+    external_id: str        # 그 채널에서 쓰는 코드
+    sku: str                # catalog 의 통합 SKU
+    note: str = ""
+
+    def __post_init__(self) -> None:
+        self.channel = (self.channel or "*").strip() or "*"
+        self.external_id = str(self.external_id or "").strip()
+        self.sku = str(self.sku or "").strip()
+
+
 ROW_TYPES = {
     "spend": SpendRow,
     "sales": SalesRow,
     "search_terms": SearchTermRow,
     "catalog": CatalogRow,
+    "sku_map": SkuMapRow,
 }
 
 

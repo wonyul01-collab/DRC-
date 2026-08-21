@@ -17,7 +17,8 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
-from ..schema import CatalogRow, SalesRow, SearchTermRow, SpendRow
+from ..schema import (CatalogRow, SalesRow, SearchTermRow, SkuMapRow,
+                      SpendRow)
 from .base import FetchResult, Source, integer, num
 
 
@@ -156,6 +157,17 @@ PROFILES: dict[str, dict[str, Any]] = {
             "new_customer_orders": ["신규주문수", "신규고객주문", "new orders"],
         },
     },
+    "sku_map": {
+        "table": "sku_map",
+        "constants": {},
+        "columns": {
+            "channel": ["채널", "판매채널", "channel"],
+            "external_id": ["채널상품코드", "상품코드", "상품번호", "옵션ID",
+                            "외부코드", "external id", "external_id"],
+            "sku": ["통합SKU", "통합sku", "sku", "대표코드"],
+            "note": ["비고", "메모", "note"],
+        },
+    },
     "catalog": {
         "table": "catalog",
         "constants": {},
@@ -246,7 +258,8 @@ def classify(path: Path) -> list[tuple[str, float, list[str]]]:
         ratio = len(hit) / len(want)
         # 표를 구분하는 결정적 컬럼. 이게 없으면 후보에서 뺀다.
         required = {"spend": "cost", "sales": "gross_sales",
-                    "search_terms": "search_term", "catalog": "sku"}[spec["table"]]
+                    "search_terms": "search_term", "catalog": "sku",
+                    "sku_map": "external_id"}[spec["table"]]
         if required not in colmap:
             continue
         # 검색어 보고서는 광고 보고서와 컬럼이 거의 겹친다. search_term 유무로 가른다.
@@ -326,7 +339,8 @@ class CsvSource(Source):
             colmap = _resolve_columns(header, spec["columns"])
 
             required = {"spend": ["cost"], "sales": ["gross_sales"],
-                        "search_terms": ["search_term"], "catalog": ["sku"]}[table]
+                        "search_terms": ["search_term"], "catalog": ["sku"],
+                        "sku_map": ["external_id", "sku"]}[table]
             missing = [c for c in required if c not in colmap]
             if missing:
                 warnings.append(
@@ -426,6 +440,17 @@ class CsvSource(Source):
                 cost=num(val("cost")),
                 conv_count=num(val("conv_count")),
                 conv_value=num(val("conv_value")),
+            )
+
+        if table == "sku_map":
+            ext = str(val("external_id") or "").strip()
+            sku = str(val("sku") or "").strip()
+            if not ext or not sku:
+                return None
+            return SkuMapRow(
+                channel=str(val("channel") or "*").strip() or "*",
+                external_id=ext, sku=sku,
+                note=str(val("note") or "").strip(),
             )
 
         if table == "catalog":

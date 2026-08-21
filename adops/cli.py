@@ -204,6 +204,58 @@ def cmd_daily(args) -> int:
     return _send(pack, path, args)
 
 
+def cmd_skumap(args) -> int:
+    """매핑이 필요한 채널 상품코드를 뽑아 채워넣을 서식을 만든다.
+
+    채널마다 코드 체계가 달라 매핑표가 필요한데, 어떤 코드가 있는지 사람이
+    일일이 찾아 적는 것은 번거롭고 빠뜨리기 쉽다. 실제 데이터에서 아직
+    원가가 대조되지 않는 코드만 추려 매출 큰 순서로 내보낸다.
+
+    사용자는 '통합SKU' 한 칸만 채우면 된다.
+    """
+    import csv as _csv
+
+    with wh.connect(args.db) as conn:
+        rows = conn.execute(
+            "SELECT ch, raw, name, SUM(rev) rev FROM ("
+            "  SELECT s.store_channel ch, s.sku raw, MAX(s.product_name) name, "
+            "         SUM(s.net_sales) rev "
+            "    FROM sales s LEFT JOIN catalog c "
+            "      ON c.sku = canon_sku(s.store_channel, s.sku) "
+            "   WHERE s.sku != '' AND (c.sku IS NULL OR c.cogs = 0) "
+            "   GROUP BY 1,2 "
+            "  UNION ALL "
+            "  SELECT p.store_channel, p.sku, '', 0 "
+            "    FROM spend p LEFT JOIN catalog c2 "
+            "      ON c2.sku = canon_sku(p.store_channel, p.sku) "
+            "   WHERE p.sku != '' AND (c2.sku IS NULL OR c2.cogs = 0) "
+            "   GROUP BY 1,2"
+            ") GROUP BY ch, raw ORDER BY rev DESC"
+        ).fetchall()
+
+    if not rows:
+        print("매핑이 필요한 코드가 없습니다. 모든 상품코드가 원가와 대조됩니다.")
+        return 0
+
+    out = Path(args.out or "sku_map_작성용.csv")
+    with out.open("w", encoding="utf-8-sig", newline="") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["채널", "채널상품코드", "통합SKU", "비고"])
+        for r in rows:
+            # 통합SKU 는 비워둔다. 사람이 채울 칸이라는 것을 분명히 하기 위해서.
+            w.writerow([r["ch"], r["raw"], "",
+                        f"{r['name'] or ''} (매출 {float(r['rev'] or 0):,.0f}원)"])
+
+    print(f"{out}  ({len(rows)}개 코드)")
+    print()
+    print("이 파일의 '통합SKU' 칸만 채우세요. 같은 상품이면 같은 값을 적습니다.")
+    print("예:  smartstore, 1234567890, SKU-1001")
+    print("     coupang,    87654321,   SKU-1001   ← 같은 상품이므로 같은 SKU")
+    print()
+    print("채운 뒤 data/raw/sku_map/ 에 넣고 다시 적재하면 적용됩니다.")
+    return 0
+
+
 def cmd_classify(args) -> int:
     """채널에서 받은 CSV 를 알맞은 폴더로 분류한다.
 
@@ -312,14 +364,27 @@ def cmd_doctor(args) -> int:
             print(f"  {table:<14} {row['n']:>8,}행   {span}")
 
         # 원가 누락은 수익성 분석 전체를 무의미하게 만든다.
-        missing = conn.execute(
-            "SELECT COUNT(DISTINCT s.sku) n FROM sales s "
-            "LEFT JOIN catalog c ON c.sku = s.sku "
-            "WHERE s.sku != '' AND (c.sku IS NULL OR c.cogs = 0)"
-        ).fetchone()["n"]
-        if missing:
-            print(f"\n  경고: 원가 미등록 SKU {missing}개 — "
-                  f"해당 매출은 기본 마진율로 추정됩니다.")
+        # 채널마다 상품코드가 달라서 sku_map 을 거쳐 대조한다.
+        rows = conn.execute(
+            "SELECT s.store_channel ch, s.sku raw, "
+            "       canon_sku(s.store_channel, s.sku) resolved, "
+            "       SUM(s.net_sales) rev "
+            "FROM sales s LEFT JOIN catalog c "
+            "  ON c.sku = canon_sku(s.store_channel, s.sku) "
+            "WHERE s.sku != '' AND (c.sku IS NULL OR c.cogs = 0) "
+            "GROUP BY 1,2 ORDER BY rev DESC"
+        ).fetchall()
+        n_map = conn.execute("SELECT COUNT(*) n FROM sku_map").fetchone()["n"]
+        print(f"\n  SKU 매핑 등록: {n_map}건")
+        if rows:
+            total = sum(float(r["rev"] or 0) for r in rows)
+            print(f"  경고: 원가가 대조되지 않는 상품코드 {len(rows)}개 "
+                  f"(해당 매출 {total:,.0f}원) — 기본 마진율로 추정됩니다.")
+            print("        매출 상위 항목:")
+            for r in rows[:8]:
+                print(f"          {r['ch']:<11} {str(r['raw'])[:24]:<26} "
+                      f"{float(r['rev'] or 0):>13,.0f}원")
+            print("        catalog 에 없는 코드라면 sku_map 에 매핑을 추가하세요.")
     return 0
 
 
@@ -375,6 +440,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="발송 없이 생성만")
     g.add_argument("--dry-run", action="store_true")
     g.set_defaults(func=cmd_daily, commentary=None, pack=None)
+
+    g = sub.add_parser("skumap", help="매핑이 필요한 상품코드를 서식으로 추출")
+    g.add_argument("--out", help="저장할 파일명 (기본 sku_map_작성용.csv)")
+    g.set_defaults(func=cmd_skumap)
 
     g = sub.add_parser("classify", help="받은 CSV를 알맞은 폴더로 분류")
     g.add_argument("--dir", default="/opt/data/incoming",
