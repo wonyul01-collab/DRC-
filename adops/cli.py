@@ -129,7 +129,69 @@ def cmd_report(args) -> int:
     # 코멘터리 포함 여부를 눈에 보이게 남긴다. 없이 생성됐는데 모르고
     # 발송하는 일을 막기 위한 신호다.
     print("코멘터리: " + ("포함됨" if pack.get("commentary") else "없음 (숫자만)"))
+
+    if args.mail:
+        return _send(pack, path, args)
     return 0
+
+
+def _send(pack: dict, path: Path, args) -> int:
+    from . import mailer
+    subject = args.subject or mailer.subject_for(pack)
+    if not pack.get("commentary"):
+        subject += " (숫자만)"
+    try:
+        rcpts = mailer.send_report(path, subject, to=args.to,
+                                   env_path=args.env, dry_run=args.dry_run)
+    except mailer.MailNotConfigured as exc:
+        print(f"발송 실패: {exc}", file=sys.stderr)
+        return 3
+    except Exception as exc:                                # noqa: BLE001
+        print(f"발송 실패: {exc}", file=sys.stderr)
+        return 3
+    verb = "발송 예정" if args.dry_run else "발송 완료"
+    print(f"{verb}: {', '.join(rcpts)}")
+    print(f"제목: {subject}")
+    return 0
+
+
+def cmd_daily(args) -> int:
+    """적재 → 분석 → 리포트 → 발송을 한 번에.
+
+    LLM 을 전혀 쓰지 않는 경로다. 모델 크레딧이 떨어져도 숫자 리포트는
+    매일 아침 도착해야 한다. 해석과 개선방안은 빠지지만, 아무것도 오지
+    않아 원인조차 모르는 상황보다 낫다.
+    """
+    day = args.date or _yesterday()
+    cfg = cfgmod.load(args.config)
+
+    # 늦게 올라오는 채널이 있으므로 최근 며칠을 함께 다시 넣는다(멱등).
+    ing = argparse.Namespace(
+        config=args.config, db=args.db, source=None,
+        date_from=(date.fromisoformat(day) - timedelta(days=args.backfill)).isoformat(),
+        date_to=day,
+    )
+    cmd_ingest(ing)
+
+    out = Path(args.out or OUT_DIR)
+    out.mkdir(parents=True, exist_ok=True)
+    with wh.connect(args.db) as conn:
+        pack = an.build(conn, cfg, day, mode=args.mode)
+    an.write(pack, out)
+
+    html = rp.render(pack)
+    path = out / f"report-{pack['mode']}-{pack['as_of']}.html"
+    path.write_text(html, encoding="utf-8")
+    print(f"\n리포트: {path}")
+
+    if pack["data_quality"]["gaps"]:
+        print("데이터 결손:", file=sys.stderr)
+        for g in pack["data_quality"]["gaps"]:
+            print(f"  - {g}", file=sys.stderr)
+
+    if args.no_mail:
+        return 0
+    return _send(pack, path, args)
 
 
 def cmd_doctor(args) -> int:
@@ -199,7 +261,26 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--out")
     g.add_argument("--pack", help="기존 분석 팩 재사용")
     g.add_argument("--commentary", help="Hermes가 쓴 해석 텍스트 파일(HTML 조각)")
+    g.add_argument("--mail", action="store_true", help="생성 후 메일 발송")
+    g.add_argument("--to", help="수신자 (미지정 시 EMAIL_HOME_ADDRESS)")
+    g.add_argument("--subject", help="제목 직접 지정")
+    g.add_argument("--env", help=".env 경로 (기본 /opt/data/.env)")
+    g.add_argument("--dry-run", action="store_true", help="발송 없이 대상만 확인")
     g.set_defaults(func=cmd_report)
+
+    # LLM 없이 도는 폴백 경로. 크론이 이것을 부른다.
+    g = sub.add_parser("daily", help="적재→분석→리포트→발송 일괄 (LLM 불필요)")
+    g.add_argument("--date")
+    g.add_argument("--mode", choices=["daily", "monthly"], default="daily")
+    g.add_argument("--out")
+    g.add_argument("--backfill", type=int, default=3,
+                   help="함께 재적재할 이전 일수 (기본 3)")
+    g.add_argument("--to")
+    g.add_argument("--subject")
+    g.add_argument("--env")
+    g.add_argument("--no-mail", action="store_true", help="발송 없이 생성만")
+    g.add_argument("--dry-run", action="store_true")
+    g.set_defaults(func=cmd_daily, commentary=None, pack=None, mail=True)
 
     g = sub.add_parser("doctor", help="설정·데이터 상태 점검")
     g.set_defaults(func=cmd_doctor)

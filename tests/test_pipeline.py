@@ -271,6 +271,76 @@ class TestCommentaryGate(unittest.TestCase):
         self.assertEqual(self._run([]), 0)
 
 
+class TestMailer(unittest.TestCase):
+    """LLM 없이도 리포트가 나가야 한다. 크레딧 소진으로 에이전트가 통째로
+    멈춘 적이 있고, 그때 크론이 걸려 있었다면 아침에 메일이 그냥 오지 않고
+    원인조차 드러나지 않았을 것이다."""
+
+    def setUp(self):
+        import tempfile
+        from adops import mailer
+        self.mailer = mailer
+        self.tmp = Path(tempfile.mkdtemp())
+        self.html = self.tmp / "r.html"
+        self.html.write_text("<b>리포트</b>", encoding="utf-8")
+
+    def _env(self, **over):
+        vals = {
+            "EMAIL_ADDRESS": "a@gmail.com",
+            "EMAIL_PASSWORD": "abcdefghijklmnop",
+            "EMAIL_SMTP_HOST": "smtp.gmail.com",
+            "EMAIL_HOME_ADDRESS": "x@naver.com",
+        }
+        vals.update(over)
+        p = self.tmp / f"env{len(list(self.tmp.iterdir()))}"
+        p.write_text("\n".join(f"{k}={v}" for k, v in vals.items() if v is not None),
+                     encoding="utf-8")
+        return p
+
+    def test_dry_run_resolves_recipients(self):
+        r = self.mailer.send_report(self.html, "제목", env_path=self._env(),
+                                    dry_run=True)
+        self.assertEqual(r, ["x@naver.com"])
+
+    def test_multiple_recipients(self):
+        env = self._env(EMAIL_HOME_ADDRESS="a@b.com, c@d.com")
+        r = self.mailer.send_report(self.html, "제목", env_path=env, dry_run=True)
+        self.assertEqual(r, ["a@b.com", "c@d.com"])
+
+    def test_truncated_app_password_rejected(self):
+        """구글 앱 비밀번호를 공백째 넣으면 셸이 잘라 4자만 남는다.
+        조용히 인증 실패하는 것보다 여기서 막는 편이 낫다."""
+        env = self._env(EMAIL_PASSWORD="abcd")
+        with self.assertRaises(self.mailer.MailNotConfigured) as ctx:
+            self.mailer.send_report(self.html, "제목", env_path=env, dry_run=True)
+        self.assertIn("4자", str(ctx.exception))
+
+    def test_missing_credentials_rejected(self):
+        env = self._env(EMAIL_PASSWORD=None)
+        with self.assertRaises(self.mailer.MailNotConfigured):
+            self.mailer.send_report(self.html, "제목", env_path=env, dry_run=True)
+
+    def test_no_recipient_rejected(self):
+        env = self._env(EMAIL_HOME_ADDRESS="")
+        with self.assertRaises(self.mailer.MailNotConfigured):
+            self.mailer.send_report(self.html, "제목", env_path=env, dry_run=True)
+
+    def test_subject_carries_key_figures(self):
+        pack = {"mode": "daily", "as_of": "2026-08-13",
+                "today": {"totals": {"realized_sales": 3786501,
+                                     "contribution_profit": 585191}},
+                "data_quality": {"gaps": []}}
+        s = self.mailer.subject_for(pack)
+        self.assertIn("2026-08-13", s)
+        self.assertIn("3,786,501", s)
+
+    def test_subject_flags_data_gaps(self):
+        pack = {"mode": "daily", "as_of": "2026-08-13",
+                "today": {"totals": {}},
+                "data_quality": {"gaps": ["광고 naver_sa: 2일 결손"]}}
+        self.assertIn("결손", self.mailer.subject_for(pack))
+
+
 class TestEndToEnd(unittest.TestCase):
     """팩 생성 → HTML 렌더까지 예외 없이 통과하는지."""
 
