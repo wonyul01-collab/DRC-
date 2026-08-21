@@ -233,6 +233,21 @@ class TestClassify(unittest.TestCase):
                         ["A1", "콜라겐", "39000", "16000", "건기식", "10", "판매중"])
         self.assertEqual(self.cs.classify(p)[0][0], "catalog")
 
+    def test_channel_product_list(self):
+        """채널 상품목록은 원가가 없다. 그게 카탈로그와의 차이다."""
+        p = self._write("쿠팡상품목록.csv",
+                        ["옵션ID", "상품명", "판매가"],
+                        ["87654321", "프리미엄 콜라겐 30포", "39000"])
+        self.assertTrue(self.cs.classify(p)[0][0].startswith("products_"))
+
+    def test_catalog_wins_over_product_list_when_cogs_present(self):
+        """원가가 있으면 카탈로그다. 상품목록으로 잘못 분류하면 원가가
+        적재되지 않아 수익성 분석이 통째로 추정치가 된다."""
+        p = self._write("상품마스터.csv",
+                        ["sku", "상품명", "판매가", "원가", "재고"],
+                        ["A1", "콜라겐", "39000", "16000", "10"])
+        self.assertEqual(self.cs.classify(p)[0][0], "catalog")
+
     def test_unknown_header_returns_no_confident_match(self):
         p = self._write("이상한파일.csv", ["가", "나", "다"], ["1", "2", "3"])
         cands = self.cs.classify(p)

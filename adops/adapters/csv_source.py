@@ -297,9 +297,17 @@ def classify(path: Path) -> list[tuple[str, float, list[str]]]:
                 header, {"search_term": PROFILES["naver_search_terms"]
                          ["columns"]["search_term"]}):
             ratio *= 0.5
+
+        # 채널 상품목록과 카탈로그는 상품코드·상품명·판매가가 겹친다.
+        # 원가는 카탈로그에만 있으므로 그것으로 가른다.
+        if spec["table"] == "products" and _resolve_columns(
+                header, {"cogs": PROFILES["catalog"]["columns"]["cogs"]}):
+            ratio *= 0.4
+
         scored.append((name, ratio, sorted(hit)))
 
-    scored.sort(key=lambda x: -x[1])
+    # 일치율이 같으면 더 많은 컬럼을 알아본 쪽이 구체적인 매칭이다.
+    scored.sort(key=lambda x: (-x[1], -len(x[2])))
     return scored
 
 
