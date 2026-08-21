@@ -40,20 +40,22 @@ prerequisites:
    python3 -m adops doctor
    ```
 
-2. 월마감 팩 생성:
+2. 월마감 팩 생성 (요약본만 출력):
    ```bash
-   python3 -m adops analyze --date "$(date +%F)" --mode monthly --stdout
+   python3 -m adops analyze --date "$(date +%F)" --mode monthly --brief
    ```
-   `monthly_close` 블록이 전월 전체를 담는다. `--date`는 오늘(1일)을 주면
-   파이프라인이 알아서 직전 달을 대상으로 잡는다.
+   `--stdout` 이 아니라 `--brief` 를 쓴다. 전체 팩은 7만자가 넘어 토큰
+   비용이 10배 이상 든다. `--date`는 오늘(1일)을 주면 파이프라인이 알아서
+   직전 달을 대상으로 잡는다.
 
-3. 팩에서 확인할 것:
-   - `monthly_close.totals` — 전월 확정 실적
-   - `vs_prev_month` / `vs_same_month_last_year` — 전월비·전년동월비
-   - `target_achievement` — 목표 달성률 (설정에 목표가 있을 때만)
-   - `by_ad_channel` — 채널별 손익분기 대비 성과
-   - `sales_bridge` — 매출 증감의 원인 분해
-   - `opportunities.budget_reallocation` — 예산 재배분 시뮬레이션
+3. 요약본에서 확인할 것:
+   - `월마감.실적` — 전월 확정 실적
+   - `월마감.전월비` / `월마감.전년동월비`
+   - `월마감.목표달성률` — 설정에 목표가 있을 때만
+   - `광고채널_30일` — 채널별 손익분기 대비 성과
+   - `매출요인분해` — 매출 증감의 원인 분해
+   - `예산재배분` — 재배분 시뮬레이션
+   - `월마감.경쟁사` — 다음 단계에서 조사할 대상
 
 ## 절차 — 2단계: 경쟁사·시장 조사
 

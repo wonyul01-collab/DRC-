@@ -84,9 +84,17 @@ def cmd_analyze(args) -> int:
     day = args.date or _yesterday()
     with wh.connect(args.db) as conn:
         pack = an.build(conn, cfg, day, mode=args.mode)
-    path = an.write(pack, args.out or OUT_DIR)
+    out_dir = args.out or OUT_DIR
+    path = an.write(pack, out_dir)
+    bpath = an.write_brief(pack, out_dir)
     print(str(path))
-    if args.stdout:
+    print(str(bpath))
+    if args.brief:
+        # 요약본만 표준출력에 낸다. 전체 팩은 7만자라 모델 컨텍스트에
+        # 그대로 넣으면 토큰 비용이 10배 이상 든다.
+        print(json.dumps(an.brief(pack), ensure_ascii=False, indent=1,
+                         default=str))
+    elif args.stdout:
         print(json.dumps(pack, ensure_ascii=False, indent=2, default=str))
     return 0
 
@@ -178,6 +186,7 @@ def cmd_daily(args) -> int:
     with wh.connect(args.db) as conn:
         pack = an.build(conn, cfg, day, mode=args.mode)
     an.write(pack, out)
+    an.write_brief(pack, out)
 
     html = rp.render(pack)
     path = out / f"report-{pack['mode']}-{pack['as_of']}.html"
@@ -252,7 +261,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--date")
     g.add_argument("--mode", choices=["daily", "monthly"], default="daily")
     g.add_argument("--out")
-    g.add_argument("--stdout", action="store_true", help="JSON을 표준출력에도")
+    g.add_argument("--stdout", action="store_true", help="전체 팩을 표준출력에 (토큰 소모 큼)")
+    g.add_argument("--brief", action="store_true",
+                   help="요약본만 표준출력에 (권장, 전체 대비 약 1/10)")
     g.set_defaults(func=cmd_analyze)
 
     g = sub.add_parser("report", help="HTML 리포트 생성")

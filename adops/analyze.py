@@ -255,12 +255,162 @@ def _monthly_close(conn: sqlite3.Connection, cfg: Config, day: str) -> dict:
     }
 
 
+def brief(pack: dict) -> dict:
+    """코멘터리 작성에 필요한 것만 추린 요약본.
+
+    전체 팩은 7만자에 달한다. 이걸 매일 모델 컨텍스트에 통째로 밀어 넣으면
+    토큰 비용이 그대로 청구되는데, 해석을 쓰는 데 필요한 것은 그중 일부다.
+    월별 추이의 원본 수치나 30일 채널별 원시 집계는 사람이 리포트 표에서
+    보면 되는 것이지 모델이 읽을 필요가 없다.
+
+    숫자는 전부 원본 팩에서 그대로 가져온다. 여기서 재계산하지 않는다.
+    """
+    t = pack["today"]["totals"]
+    m30 = pack["last_30d"]["totals"]
+    kd = pack["keyword_diagnosis"]
+    opp = pack["opportunities"]
+    dow = pack["comparison"]["vs_last_week_same_dow"]["delta"]
+
+    def kw(f):
+        return {
+            "채널": f["ad_channel"], "키워드": f["keyword"],
+            "등급": f["severity"], "광고비": round(f["cost"]),
+            "ROAS": round(f["roas"], 3) if f["roas"] else 0,
+            "손익분기": round(f["bep_roas"], 2) if f["bep_roas"] else None,
+            "근거": f["evidence"], "조치": f["action"],
+            "월절감": round(f["monthly_saving"]),
+        }
+
+    out = {
+        "기준일": pack["as_of"],
+        "모드": pack["mode"],
+        "데이터결손": pack["data_quality"]["gaps"],
+
+        "오늘": {k: round(v) if isinstance(v, (int, float)) and v else v
+                 for k, v in {
+                     "실매출": t["realized_sales"], "광고비": t["ad_cost"],
+                     "주문수": t["orders"], "객단가": t["aov"],
+                     "공헌이익": t["contribution_profit"],
+                     "광고비비중": round(t["ad_cost_ratio"], 4) if t["ad_cost_ratio"] else None,
+                 }.items()},
+        "전주동요일대비": {k: (round(v, 3) if v is not None else None)
+                          for k, v in dow.items()},
+
+        "최근30일": {
+            "실매출": round(m30["realized_sales"]),
+            "광고비": round(m30["ad_cost"]),
+            "공헌이익": round(m30["contribution_profit"]),
+            "어트리뷰션괴리": (round(m30["attribution_gap"], 3)
+                              if m30["attribution_gap"] is not None else None),
+        },
+
+        "판매채널": [{
+            "채널": c["store_channel"],
+            "실매출": round(c["sales"].get("realized_sales", 0)),
+            "광고비": round(c["ad"]["cost"]),
+            "ROAS": round(c["ad"]["roas"], 2) if c["ad"]["roas"] else None,
+            "손익분기ROAS": round(c["bep_roas"], 2) if c["bep_roas"] else None,
+            "공헌이익": round(c["contribution_profit"]),
+            "판정": c["verdict"],
+        } for c in pack["today"]["by_store_channel"]],
+
+        "광고채널_30일": [{
+            "채널": a["ad_channel"], "광고비": round(a["cost"]),
+            "ROAS": round(a["roas"], 2) if a["roas"] else None,
+            "손익분기대비": round(a["roas_vs_bep"], 2) if a.get("roas_vs_bep") else None,
+        } for a in pack["last_30d"]["by_ad_channel"][:6]],
+
+        "조치대기열": [{
+            "구분": a["type"], "등급": a["severity"], "대상": a["title"],
+            "임팩트": round(a["impact_krw"]), "종류": a["impact_kind"],
+            "근거": a["evidence"], "조치": a["action"],
+        } for a in pack["action_queue"][:7]],
+        "조치대기열_전체건수": len(pack["action_queue"]),
+        "월절감_합계": round(kd["total_monthly_saving"]),
+
+        "낭비키워드": [kw(f) for f in kd["findings"][:5]],
+        "제외키워드후보": [{
+            "채널": n["ad_channel"], "검색어": n["search_term"],
+            "지출": round(n["cost"]), "월절감": round(n["monthly_saving"]),
+        } for n in kd["negative_keyword_candidates"][:5]],
+        "승격후보": [{
+            "채널": p["ad_channel"], "검색어": p["search_term"],
+            "전환": p["conv_count"],
+            "ROAS": round(p["roas"], 2) if p["roas"] else None,
+            "월기여": round(p["monthly_value"]),
+        } for p in kd["promotion_candidates"][:5]],
+
+        "매출요인분해": [{
+            "채널": b["store_channel"],
+            "매출증감률": round(b["revenue_change_pct"], 3) if b["revenue_change_pct"] is not None else None,
+            "주원인": b["primary_driver"], "처방": b["prescription"],
+        } for b in opp["sales_bridge"]],
+
+        "예산재배분": {
+            "회수가능": round(opp["budget_reallocation"]["total_releasable"]),
+            "기대추가매출": round(opp["budget_reallocation"]["expected_added_sales"]),
+            "이동처수": len(opp["budget_reallocation"]["move_to"]),
+        },
+        "품절광고": {
+            "건수": len(opp["dead_sku_spend"]),
+            "월절감": round(sum(d["monthly_saving"] for d in opp["dead_sku_spend"])),
+        },
+
+        # 월별 원본 수치는 리포트 표에 이미 있다. 모델에는 추세만 준다.
+        "월별추이": [{
+            "월": m["month"], "실매출": round(m["realized_sales"]),
+            "광고비": round(m["ad_cost"]),
+            "전월비": round(m["mom_sales"], 3) if m["mom_sales"] is not None else None,
+        } for m in pack["trends"]["monthly"]],
+        "핵심키워드추세": [{
+            "키워드": k["keyword"], "채널": k["ad_channel"],
+            "추세": k["direction"], "올해매출": round(k["ytd_conv_value"]),
+        } for k in pack["trends"]["keyword_monthly"]["keywords"]],
+    }
+
+    cm = opp.get("customer_mix")
+    if cm:
+        out["자사몰신규구조"] = {
+            "신규비중": round(cm["new_ratio"], 3),
+            "CAC": round(cm["cac"]),
+            "CAC회수주문수": round(cm["payback_orders"], 2) if cm.get("payback_orders") else None,
+        }
+
+    if pack.get("monthly_close"):
+        mc = pack["monthly_close"]
+        out["월마감"] = {
+            "기간": mc["period"]["label"],
+            "실적": {k: round(v) for k, v in mc["totals"].items()
+                     if isinstance(v, (int, float))},
+            "전월비": {k: (round(v, 3) if v is not None else None)
+                       for k, v in mc["vs_prev_month"]["delta"].items()},
+            "전년동월비": ({k: (round(v, 3) if v is not None else None)
+                            for k, v in mc["vs_same_month_last_year"]["delta"].items()}
+                           if mc.get("vs_same_month_last_year") else None),
+            "목표달성률": (round(mc["target_achievement"], 3)
+                          if mc.get("target_achievement") else None),
+            "경쟁사": mc["competitors_to_research"],
+        }
+    return out
+
+
 def write(pack: dict, out_dir: str | Path) -> Path:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"pack-{pack['mode']}-{pack['as_of']}.json"
     path.write_text(
         json.dumps(pack, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_brief(pack: dict, out_dir: str | Path) -> Path:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"brief-{pack['mode']}-{pack['as_of']}.json"
+    path.write_text(
+        json.dumps(brief(pack), ensure_ascii=False, indent=1, default=str),
         encoding="utf-8",
     )
     return path

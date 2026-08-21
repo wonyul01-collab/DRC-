@@ -271,6 +271,57 @@ class TestCommentaryGate(unittest.TestCase):
         self.assertEqual(self._run([]), 0)
 
 
+class TestBrief(unittest.TestCase):
+    """요약본은 토큰 비용을 좌우한다. 전체 팩은 7만자가 넘어서, 매일
+    통째로 모델에 넣으면 그만큼 매일 청구된다."""
+
+    def setUp(self):
+        conn = make_conn()
+        wh.upsert(conn, [CatalogRow(sku="A", price=10000, cogs=5000, stock_qty=10)])
+        rows_s, rows_v = [], []
+        for i in range(40):
+            d = metrics.shift("2026-08-13", -i)
+            rows_s.append(SpendRow(
+                date=d, ad_channel="naver_sa", store_channel="smartstore",
+                campaign="c", keyword="k", clicks=50, cost=50000,
+                conv_count=5, conv_value=200000))
+            rows_v.append(SalesRow(date=d, store_channel="smartstore", sku="A",
+                                   orders=5, gross_sales=200000))
+        wh.upsert(conn, rows_s)
+        wh.upsert(conn, rows_v)
+        self.pack = analyze.build(conn, cfg(), "2026-08-13", mode="daily")
+
+    def test_brief_is_much_smaller(self):
+        import json
+        full = len(json.dumps(self.pack, ensure_ascii=False))
+        small = len(json.dumps(analyze.brief(self.pack), ensure_ascii=False))
+        self.assertLess(small, full * 0.35,
+                        f"요약본이 충분히 줄지 않음: {small} vs {full}")
+
+    def test_brief_keeps_decision_inputs(self):
+        """줄이더라도 판단 근거는 남아야 한다."""
+        b = analyze.brief(self.pack)
+        for key in ("데이터결손", "오늘", "판매채널", "조치대기열",
+                    "매출요인분해", "월별추이"):
+            self.assertIn(key, b)
+
+    def test_brief_numbers_match_pack(self):
+        """요약본에서 재계산하지 않는다. 원본과 값이 달라지면 안 된다."""
+        b = analyze.brief(self.pack)
+        self.assertEqual(b["오늘"]["실매출"],
+                         round(self.pack["today"]["totals"]["realized_sales"]))
+        self.assertEqual(b["조치대기열_전체건수"], len(self.pack["action_queue"]))
+
+    def test_monthly_brief_includes_close(self):
+        conn = make_conn()
+        wh.upsert(conn, [SalesRow(date="2026-07-15", store_channel="own",
+                                  sku="A", orders=1, gross_sales=10000)])
+        pack = analyze.build(conn, cfg(), "2026-08-01", mode="monthly")
+        b = analyze.brief(pack)
+        self.assertIn("월마감", b)
+        self.assertEqual(b["월마감"]["기간"], "2026년 07월")
+
+
 class TestMailer(unittest.TestCase):
     """LLM 없이도 리포트가 나가야 한다. 크레딧 소진으로 에이전트가 통째로
     멈춘 적이 있고, 그때 크론이 걸려 있었다면 아침에 메일이 그냥 오지 않고
