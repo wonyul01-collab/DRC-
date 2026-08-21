@@ -19,6 +19,7 @@ from pathlib import Path
 
 from . import analyze as an
 from . import config as cfgmod
+from . import metrics as mx
 from . import report as rp
 from . import warehouse as wh
 from .adapters import build_sources
@@ -210,10 +211,25 @@ def cmd_doctor(args) -> int:
     print(f"기본 마진율     : {cfg.get('default_gross_margin_rate')}")
     print("채널 수수료율   :", cfg.get("channel_fees"))
     print()
+
+    # 리포트가 실제로 쓰는 값을 그대로 보여준다. 예전에는 기본 마진율로만
+    # 계산해서 출력했는데, 분석은 카탈로그 원가로 가중평균한 실제 마진을
+    # 쓰기 때문에 둘이 달랐다. 여기서 확인한 숫자와 리포트의 판정 기준이
+    # 어긋나면, 맞는 값을 틀렸다고 판단해 엉뚱한 곳을 고치게 된다.
+    with wh.connect(args.db) as conn:
+        actual = mx.channel_margin_rates(conn, cfg)
+        has_cogs = conn.execute(
+            "SELECT COUNT(*) n FROM catalog WHERE cogs > 0").fetchone()["n"]
+
+    default_gm = float(cfg.get("default_gross_margin_rate", 0.45))
+    src = "카탈로그 원가 기준" if has_cogs else "기본 마진율 기준(원가 미등록)"
+    print(f"손익분기 ROAS   ({src})")
     for ch in ("smartstore", "coupang", "own"):
-        bep = cfg.bep_roas(ch)
-        print(f"  {ch:<12} 손익분기 ROAS "
-              + (f"{bep*100:,.0f}%" if bep else "계산불가(마진<수수료)"))
+        gm = actual.get(ch, default_gm)
+        bep = cfg.bep_roas(ch, gm)
+        line = (f"{bep*100:,.0f}%" if bep else "계산불가(마진<수수료)")
+        print(f"  {ch:<12} {line:>22}   (매출총이익률 {gm*100:.1f}%"
+              f" − 수수료 {cfg.fee_rate(ch)*100:.2f}%)")
     print()
 
     sources = build_sources(cfg)

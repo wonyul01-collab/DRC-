@@ -50,6 +50,38 @@ class TestBreakevenRoas(unittest.TestCase):
         self.assertIsNone(c.bep_roas("coupang", 0.05))
 
 
+class TestMarginSource(unittest.TestCase):
+    """doctor 가 알려주는 손익분기 ROAS 와 리포트가 판정에 쓰는 값이
+    달라서는 안 된다. 어긋나면 맞는 값을 틀렸다고 보고 엉뚱한 곳을 고친다."""
+
+    def test_catalog_cogs_overrides_default_margin(self):
+        conn = make_conn()
+        # 원가율 40% → 매출총이익률 60% (기본값 45% 와 다르게)
+        wh.upsert(conn, [CatalogRow(sku="A", price=10000, cogs=4000)])
+        wh.upsert(conn, [SalesRow(date="2026-08-13", store_channel="smartstore",
+                                  sku="A", orders=1, gross_sales=10000)])
+        rates = metrics.channel_margin_rates(conn, cfg())
+        self.assertAlmostEqual(rates["smartstore"], 0.60, places=6)
+        self.assertNotAlmostEqual(rates["smartstore"], 0.45, places=2)
+
+    def test_missing_cogs_falls_back_to_default(self):
+        conn = make_conn()
+        wh.upsert(conn, [SalesRow(date="2026-08-13", store_channel="coupang",
+                                  sku="ZZ", orders=1, gross_sales=10000)])
+        rates = metrics.channel_margin_rates(conn, cfg())
+        self.assertAlmostEqual(rates["coupang"], 0.45, places=6)
+
+    def test_bep_follows_actual_margin(self):
+        conn = make_conn()
+        wh.upsert(conn, [CatalogRow(sku="A", price=10000, cogs=4000)])
+        wh.upsert(conn, [SalesRow(date="2026-08-13", store_channel="smartstore",
+                                  sku="A", orders=1, gross_sales=10000)])
+        c = cfg()
+        gm = metrics.channel_margin_rates(conn, c)["smartstore"]
+        # 공헌이익률 = 0.60 - 0.0585 = 0.5415 → BEP = 1/0.5415
+        self.assertAlmostEqual(c.bep_roas("smartstore", gm), 1 / 0.5415, places=6)
+
+
 class TestContributionProfit(unittest.TestCase):
     def setUp(self):
         self.conn = make_conn()
