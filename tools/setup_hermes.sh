@@ -37,6 +37,18 @@ fi
 
 say "2. 저장소 갱신"
 cd "$REPO" || exit 1
+
+# 컨테이너 안에서는 저장소 소유 uid 가 실행 사용자와 달라 git 이 안전장치로
+# 거부하는 일이 잦다. 그러면 git pull 이 멈추고, 옛 코드로 돌면서 "없는
+# 명령" 오류가 뒤따라 원인이 엉뚱한 곳으로 보인다.
+if ! git status >/dev/null 2>&1; then
+    git config --global --add safe.directory "$REPO" 2>/dev/null
+    if git status >/dev/null 2>&1; then
+        ok "safe.directory 등록 (소유권 경고 해소)"
+    else
+        bad "git 저장소를 읽을 수 없음: $REPO"
+    fi
+fi
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 printf '  현재 브랜치 : %s\n' "$BRANCH"
 if git pull --ff-only 2>&1 | sed 's/^/  /'; then
