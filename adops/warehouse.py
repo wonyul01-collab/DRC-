@@ -26,15 +26,22 @@ CREATE TABLE IF NOT EXISTS spend (
     store_channel TEXT NOT NULL,
     campaign TEXT NOT NULL DEFAULT '',
     adgroup TEXT NOT NULL DEFAULT '',
-    keyword TEXT,
+    -- NULL 을 허용하면 안 된다. SQLite 는 PRIMARY KEY 안의 NULL 을 매번
+    -- 서로 다른 값으로 취급해서 INSERT OR REPLACE 가 기존 행을 찾지 못하고,
+    -- 키워드 개념이 없는 채널(메타·인스타·구글 일부·쿠팡 상품광고)의
+    -- 광고비가 재적재할 때마다 중복 누적된다.
+    keyword TEXT NOT NULL DEFAULT '',
     match_type TEXT NOT NULL DEFAULT '',
     impressions INTEGER NOT NULL DEFAULT 0,
     clicks INTEGER NOT NULL DEFAULT 0,
     cost REAL NOT NULL DEFAULT 0,
     conv_count REAL NOT NULL DEFAULT 0,
     conv_value REAL NOT NULL DEFAULT 0,
-    sku TEXT,
-    PRIMARY KEY (date, ad_channel, campaign, adgroup, keyword, match_type)
+    -- 상품 단위로 집행되는 광고(쿠팡 상품광고, 구글 쇼핑)는 키워드가 아니라
+    -- 상품이 행의 정체성이다. sku 가 키에 없으면 같은 캠페인의 여러 상품이
+    -- 서로를 덮어써서 하나만 남는다.
+    sku TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (date, ad_channel, campaign, adgroup, keyword, match_type, sku)
 );
 CREATE INDEX IF NOT EXISTS ix_spend_date ON spend(date);
 CREATE INDEX IF NOT EXISTS ix_spend_kw ON spend(keyword);
@@ -97,6 +104,58 @@ CREATE TABLE IF NOT EXISTS ingest_log (
 """
 
 
+def migrate(conn: sqlite3.Connection) -> int:
+    """예전 스키마(keyword NULL 허용)로 만들어진 DB를 고친다.
+
+    NULL 키워드 행이 재적재 때마다 중복 누적되어 있으므로, 스키마를 바꾸는
+    것만으로는 부족하고 이미 쌓인 중복도 걷어내야 한다. 같은 키의 행이
+    여러 개면 가장 나중에 적재된 것(rowid 최대)을 남긴다. 채널이 수치를
+    정정해 다시 보낸 경우 최신값이 맞기 때문이다.
+
+    제거한 중복 행 수를 반환한다.
+    """
+    # sqlite3.Row 에는 .get() 이 없으므로 평범한 dict 로 옮긴다.
+    notnull = {c["name"]: bool(c["notnull"])
+               for c in conn.execute("PRAGMA table_info(spend)")}
+    if not notnull:
+        return 0
+    # 두 가지를 함께 고친다.
+    #  - keyword 가 NULL 을 허용하면 재적재 시 중복이 쌓인다.
+    #  - sku 가 키에 없으면 같은 캠페인의 여러 상품이 서로를 덮어쓴다.
+    if notnull.get("keyword") and notnull.get("sku"):
+        return 0                      # 이미 새 스키마
+
+    before = conn.execute("SELECT COUNT(*) n FROM spend").fetchone()["n"]
+    conn.executescript("""
+        CREATE TABLE spend_migrated (
+            date TEXT NOT NULL, ad_channel TEXT NOT NULL,
+            store_channel TEXT NOT NULL, campaign TEXT NOT NULL DEFAULT '',
+            adgroup TEXT NOT NULL DEFAULT '', keyword TEXT NOT NULL DEFAULT '',
+            match_type TEXT NOT NULL DEFAULT '',
+            impressions INTEGER NOT NULL DEFAULT 0,
+            clicks INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0,
+            conv_count REAL NOT NULL DEFAULT 0, conv_value REAL NOT NULL DEFAULT 0,
+            sku TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (date, ad_channel, campaign, adgroup, keyword, match_type, sku)
+        );
+        INSERT INTO spend_migrated
+        SELECT date, ad_channel, store_channel, campaign, adgroup,
+               COALESCE(keyword, ''), match_type, impressions, clicks, cost,
+               conv_count, conv_value, COALESCE(sku, '')
+          FROM spend
+         WHERE rowid IN (
+               SELECT MAX(rowid) FROM spend
+                GROUP BY date, ad_channel, campaign, adgroup,
+                         COALESCE(keyword, ''), match_type, COALESCE(sku, ''));
+        DROP TABLE spend;
+        ALTER TABLE spend_migrated RENAME TO spend;
+        CREATE INDEX IF NOT EXISTS ix_spend_date ON spend(date);
+        CREATE INDEX IF NOT EXISTS ix_spend_kw ON spend(keyword);
+    """)
+    after = conn.execute("SELECT COUNT(*) n FROM spend").fetchone()["n"]
+    return before - after
+
+
 @contextmanager
 def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
     path = Path(db_path or DEFAULT_DB)
@@ -105,6 +164,11 @@ def connect(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(SCHEMA_SQL)
+        removed = migrate(conn)
+        if removed:
+            import sys
+            print(f"[migrate] 중복 광고비 행 {removed:,}개 제거 "
+                  f"(키워드 없는 채널의 재적재 중복)", file=sys.stderr)
         yield conn
         conn.commit()
     finally:
@@ -157,6 +221,13 @@ def upsert(conn: sqlite3.Connection, rows: Sequence) -> int:
         d = to_dict(r)
         if table == "catalog":
             d["active"] = 1 if d.get("active", True) else 0
+        elif table == "spend":
+            # PRIMARY KEY 안의 NULL 은 매번 다른 값으로 취급되어 멱등성이
+            # 깨진다. 어댑터가 무엇을 주든 여기서 빈 문자열로 통일한다.
+            if d.get("keyword") is None:
+                d["keyword"] = ""
+            if d.get("sku") is None:
+                d["sku"] = ""
         payload.append(d)
     conn.executemany(_UPSERT[table], payload)
     return len(payload)

@@ -213,6 +213,81 @@ class TestIdempotentIngest(unittest.TestCase):
         total = conn.execute("SELECT SUM(cost) s FROM spend").fetchone()["s"]
         self.assertEqual(total, 1000)
 
+    def test_null_keyword_is_also_idempotent(self):
+        """메타·인스타·구글 일부·쿠팡 상품광고는 키워드가 없다.
+
+        SQLite 는 PRIMARY KEY 안의 NULL 을 매번 서로 다른 값으로 취급하므로,
+        NULL 을 그대로 두면 INSERT OR REPLACE 가 기존 행을 찾지 못해 재적재
+        때마다 광고비가 누적된다. 스킬이 매일 최근 3일을 다시 넣기 때문에
+        이 채널들의 ROAS 와 공헌이익이 날마다 잘못 하락하게 된다.
+        """
+        conn = make_conn()
+        row = SpendRow(date="2026-08-13", ad_channel="meta",
+                       store_channel="own", campaign="c",
+                       keyword=None, clicks=10, cost=1000)
+        for _ in range(5):
+            wh.upsert(conn, [row])
+        r = conn.execute("SELECT COUNT(*) n, SUM(cost) s FROM spend").fetchone()
+        self.assertEqual(r["n"], 1)
+        self.assertEqual(r["s"], 1000)
+
+    def test_same_campaign_different_skus_kept_apart(self):
+        """상품광고는 상품이 행의 정체성이다. sku 가 키에 없으면 같은
+        캠페인의 여러 상품이 서로를 덮어써서 하나만 남는다."""
+        conn = make_conn()
+        wh.upsert(conn, [
+            SpendRow(date="2026-08-13", ad_channel="coupang_ads",
+                     store_channel="coupang", campaign="c", sku=sku, cost=1000)
+            for sku in ("A", "B", "C")
+        ])
+        r = conn.execute("SELECT COUNT(*) n, SUM(cost) s FROM spend").fetchone()
+        self.assertEqual((r["n"], r["s"]), (3, 3000))
+
+    def test_null_keyword_stored_as_empty_string(self):
+        """키워드 분석 쿼리가 `!= ''` 로 거르므로 빈 문자열이어야 한다."""
+        conn = make_conn()
+        wh.upsert(conn, [SpendRow(date="2026-08-13", ad_channel="meta",
+                                  store_channel="own", campaign="c",
+                                  keyword=None, cost=1000)])
+        self.assertEqual(
+            conn.execute("SELECT keyword FROM spend").fetchone()["keyword"], "")
+
+    def test_migration_dedupes_legacy_rows(self):
+        """예전 스키마로 이미 중복이 쌓인 DB 도 복구되어야 한다."""
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        # 예전 스키마 재현 (keyword NULL 허용)
+        conn.executescript("""
+            CREATE TABLE spend (
+                date TEXT NOT NULL, ad_channel TEXT NOT NULL,
+                store_channel TEXT NOT NULL, campaign TEXT NOT NULL DEFAULT '',
+                adgroup TEXT NOT NULL DEFAULT '', keyword TEXT,
+                match_type TEXT NOT NULL DEFAULT '',
+                impressions INTEGER NOT NULL DEFAULT 0,
+                clicks INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0,
+                conv_count REAL NOT NULL DEFAULT 0,
+                conv_value REAL NOT NULL DEFAULT 0, sku TEXT,
+                PRIMARY KEY (date, ad_channel, campaign, adgroup, keyword, match_type)
+            );""")
+        for _ in range(4):
+            conn.execute(
+                "INSERT INTO spend (date,ad_channel,store_channel,campaign,"
+                "keyword,cost) VALUES ('2026-08-13','meta','own','c',NULL,1000)")
+        self.assertEqual(
+            conn.execute("SELECT SUM(cost) s FROM spend").fetchone()["s"], 4000)
+
+        removed = wh.migrate(conn)
+        self.assertEqual(removed, 3)
+        r = conn.execute("SELECT COUNT(*) n, SUM(cost) s FROM spend").fetchone()
+        self.assertEqual((r["n"], r["s"]), (1, 1000))
+
+        # 마이그레이션 후에도 멱등해야 한다
+        wh.upsert(conn, [SpendRow(date="2026-08-13", ad_channel="meta",
+                                  store_channel="own", campaign="c",
+                                  keyword=None, cost=1000)])
+        self.assertEqual(
+            conn.execute("SELECT COUNT(*) n FROM spend").fetchone()["n"], 1)
+
 
 class TestCommentaryGate(unittest.TestCase):
     """코멘터리가 빠진 채 리포트가 조용히 만들어지면 안 된다.
