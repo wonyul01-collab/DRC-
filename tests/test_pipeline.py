@@ -50,6 +50,50 @@ class TestBreakevenRoas(unittest.TestCase):
         self.assertIsNone(c.bep_roas("coupang", 0.05))
 
 
+class TestClassify(unittest.TestCase):
+    """폴더가 아홉 개라 손으로 넣다 보면 틀린다. 잘못 넣으면 그 채널만
+    빠진 리포트가 조용히 나가므로, 헤더로 판별해준다."""
+
+    def setUp(self):
+        import tempfile
+        from adops.adapters import csv_source
+        self.cs = csv_source
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def _write(self, name, header, row):
+        p = self.tmp / name
+        p.write_text(",".join(header) + "\n" + ",".join(row) + "\n",
+                     encoding="utf-8-sig")
+        return p
+
+    def test_naver_keyword_report(self):
+        p = self._write("아무이름.csv",
+                        ["날짜", "캠페인", "광고그룹", "키워드", "노출수",
+                         "클릭수", "광고비", "전환수", "전환매출액"],
+                        ["2026-08-13", "c", "g", "콜라겐", "100", "5", "5000", "1", "30000"])
+        self.assertEqual(self.cs.classify(p)[0][0], "naver_sa")
+
+    def test_search_term_report_not_confused_with_keyword_report(self):
+        """검색어 보고서는 키워드 보고서와 컬럼이 거의 겹친다."""
+        p = self._write("보고서.csv",
+                        ["날짜", "캠페인", "광고그룹", "키워드", "검색어",
+                         "노출수", "클릭수", "광고비", "전환수", "전환매출액"],
+                        ["2026-08-13", "c", "g", "콜라겐", "콜라겐 추천",
+                         "100", "5", "5000", "0", "0"])
+        self.assertEqual(self.cs.classify(p)[0][0], "naver_search_terms")
+
+    def test_catalog(self):
+        p = self._write("상품표.csv",
+                        ["sku", "상품명", "판매가", "원가", "카테고리", "재고", "판매상태"],
+                        ["A1", "콜라겐", "39000", "16000", "건기식", "10", "판매중"])
+        self.assertEqual(self.cs.classify(p)[0][0], "catalog")
+
+    def test_unknown_header_returns_no_confident_match(self):
+        p = self._write("이상한파일.csv", ["가", "나", "다"], ["1", "2", "3"])
+        cands = self.cs.classify(p)
+        self.assertTrue(not cands or cands[0][1] < 0.4)
+
+
 class TestMarginSource(unittest.TestCase):
     """doctor 가 알려주는 손익분기 ROAS 와 리포트가 판정에 쓰는 값이
     달라서는 안 된다. 어긋나면 맞는 값을 틀렸다고 보고 엉뚱한 곳을 고친다."""

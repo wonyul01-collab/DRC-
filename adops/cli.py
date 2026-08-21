@@ -204,6 +204,68 @@ def cmd_daily(args) -> int:
     return _send(pack, path, args)
 
 
+def cmd_classify(args) -> int:
+    """채널에서 받은 CSV 를 알맞은 폴더로 분류한다.
+
+    폴더가 아홉 개라 손으로 넣다 보면 틀리기 쉽고, 잘못 넣으면 그 채널만
+    빠진 리포트가 조용히 나간다. 헤더를 보고 어디에 속하는지 판정해준다.
+    """
+    from .adapters.csv_source import RAW_ROOT, classify
+
+    src = Path(args.dir)
+    if not src.exists():
+        print(f"오류: 폴더가 없습니다 — {src}", file=sys.stderr)
+        return 2
+
+    files = sorted(p for p in src.iterdir()
+                   if p.suffix.lower() in (".csv", ".tsv", ".txt"))
+    if not files:
+        print(f"{src} 에 CSV 파일이 없습니다.")
+        return 0
+
+    dest_root = Path(args.to or RAW_ROOT)
+    moved, unsure = 0, []
+
+    for f in files:
+        cands = classify(f)
+        if not cands or cands[0][1] < 0.4:
+            unsure.append(f)
+            print(f"[?]  {f.name}")
+            if cands:
+                print(f"       가장 가까운 후보: {cands[0][0]} (일치율 "
+                      f"{cands[0][1]*100:.0f}%)")
+            else:
+                print("       인식 실패 — 헤더를 확인하세요")
+            continue
+
+        name, ratio, hit = cands[0]
+        mark = "OK " if ratio >= 0.7 else "~  "
+        print(f"[{mark}] {f.name}")
+        print(f"       → {name}  (일치율 {ratio*100:.0f}%, 인식 {len(hit)}개 컬럼)")
+        if len(cands) > 1 and cands[1][1] > ratio * 0.8:
+            print(f"       주의: {cands[1][0]} 와 비슷합니다. 결과를 확인하세요")
+
+        if args.move:
+            target = dest_root / name
+            target.mkdir(parents=True, exist_ok=True)
+            f.rename(target / f.name)
+            print(f"       이동: {target}/{f.name}")
+            moved += 1
+
+    print()
+    if args.move:
+        print(f"{moved}개 이동 완료.")
+    else:
+        print("실제로 옮기려면 --move 를 붙이세요.")
+    if unsure:
+        print(f"\n분류하지 못한 파일 {len(unsure)}개:")
+        for f in unsure:
+            print(f"  - {f.name}")
+        print("  헤더를 보여주시면 어댑터에 별칭을 추가할 수 있습니다:")
+        print(f"  head -1 '{unsure[0]}'")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     """설정·데이터 상태 점검. 크론을 걸기 전에 먼저 돌린다."""
     cfg = cfgmod.load(args.config)
@@ -313,6 +375,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="발송 없이 생성만")
     g.add_argument("--dry-run", action="store_true")
     g.set_defaults(func=cmd_daily, commentary=None, pack=None)
+
+    g = sub.add_parser("classify", help="받은 CSV를 알맞은 폴더로 분류")
+    g.add_argument("--dir", default="/opt/data/incoming",
+                   help="분류할 파일이 있는 폴더 (기본 /opt/data/incoming)")
+    g.add_argument("--to", help="대상 루트 (기본 data/raw)")
+    g.add_argument("--move", action="store_true", help="실제로 이동")
+    g.set_defaults(func=cmd_classify)
 
     g = sub.add_parser("doctor", help="설정·데이터 상태 점검")
     g.set_defaults(func=cmd_doctor)

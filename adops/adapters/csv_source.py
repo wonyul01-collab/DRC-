@@ -219,6 +219,47 @@ def _parse_date(value: str) -> str | None:
     return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
 
 
+def classify(path: Path) -> list[tuple[str, float, list[str]]]:
+    """CSV 헤더를 보고 어느 프로파일 폴더에 속하는지 추정한다.
+
+    폴더가 아홉 개라 사람이 매번 판단하기 번거롭고, 잘못 넣으면 그 채널만
+    조용히 빠진 리포트가 나간다. 헤더의 컬럼 별칭이 몇 개나 맞는지로
+    점수를 매겨 후보를 순서대로 돌려준다.
+
+    반환: [(프로파일명, 일치율, 인식된 필드 목록), ...] 점수 내림차순
+    """
+    try:
+        header, rows = _read_rows(path)
+    except Exception:                                       # noqa: BLE001
+        return []
+    if not header:
+        return []
+
+    scored: list[tuple[str, float, list[str]]] = []
+    for name, spec in PROFILES.items():
+        colmap = _resolve_columns(header, spec["columns"])
+        # 설명용 밑줄 필드(_platform 등)는 판별에 쓰지 않는다.
+        hit = [f for f in colmap if not f.startswith("_")]
+        want = [f for f in spec["columns"] if not f.startswith("_")]
+        if not want:
+            continue
+        ratio = len(hit) / len(want)
+        # 표를 구분하는 결정적 컬럼. 이게 없으면 후보에서 뺀다.
+        required = {"spend": "cost", "sales": "gross_sales",
+                    "search_terms": "search_term", "catalog": "sku"}[spec["table"]]
+        if required not in colmap:
+            continue
+        # 검색어 보고서는 광고 보고서와 컬럼이 거의 겹친다. search_term 유무로 가른다.
+        if spec["table"] == "spend" and "search_term" in _resolve_columns(
+                header, {"search_term": PROFILES["naver_search_terms"]
+                         ["columns"]["search_term"]}):
+            ratio *= 0.5
+        scored.append((name, ratio, sorted(hit)))
+
+    scored.sort(key=lambda x: -x[1])
+    return scored
+
+
 class CsvSource(Source):
     """data/raw/<profile>/*.csv 를 읽어 정규화 레코드로 변환."""
 
