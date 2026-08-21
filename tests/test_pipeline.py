@@ -322,6 +322,24 @@ class TestBrief(unittest.TestCase):
         self.assertEqual(b["월마감"]["기간"], "2026년 07월")
 
 
+class TestDailyFlags(unittest.TestCase):
+    """크론 줄에 적어둔 옵션이 실제로 인식되어야 한다. 문서와 코드가
+    어긋나면 매일 아침 조용히 실패한다."""
+
+    def _parse(self, argv):
+        from adops import cli
+        return cli.build_parser().parse_args(argv)
+
+    def test_mail_is_default(self):
+        self.assertTrue(self._parse(["daily"]).mail)
+
+    def test_explicit_mail_flag_accepted(self):
+        self.assertTrue(self._parse(["daily", "--mail"]).mail)
+
+    def test_no_mail_disables(self):
+        self.assertFalse(self._parse(["daily", "--no-mail"]).mail)
+
+
 class TestMailer(unittest.TestCase):
     """LLM 없이도 리포트가 나가야 한다. 크레딧 소진으로 에이전트가 통째로
     멈춘 적이 있고, 그때 크론이 걸려 있었다면 아침에 메일이 그냥 오지 않고

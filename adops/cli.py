@@ -198,7 +198,7 @@ def cmd_daily(args) -> int:
         for g in pack["data_quality"]["gaps"]:
             print(f"  - {g}", file=sys.stderr)
 
-    if args.no_mail:
+    if not args.mail:
         return 0
     return _send(pack, path, args)
 
@@ -289,9 +289,14 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--to")
     g.add_argument("--subject")
     g.add_argument("--env")
-    g.add_argument("--no-mail", action="store_true", help="발송 없이 생성만")
+    # 기본 동작은 발송이다. --mail 은 크론 줄에서 의도를 드러내기 위한
+    # 명시적 별칭이고, --no-mail 로 끈다.
+    g.add_argument("--mail", dest="mail", action="store_true", default=True,
+                   help="메일 발송 (기본 동작)")
+    g.add_argument("--no-mail", dest="mail", action="store_false",
+                   help="발송 없이 생성만")
     g.add_argument("--dry-run", action="store_true")
-    g.set_defaults(func=cmd_daily, commentary=None, pack=None, mail=True)
+    g.set_defaults(func=cmd_daily, commentary=None, pack=None)
 
     g = sub.add_parser("doctor", help="설정·데이터 상태 점검")
     g.set_defaults(func=cmd_doctor)
