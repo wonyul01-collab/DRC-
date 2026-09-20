@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+cookies.txt
+*.mp4
+*.mp3
+*.webm
+*.part
+오류기록.txt
