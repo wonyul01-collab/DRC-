@@ -1,18 +1,20 @@
 @echo off
 chcp 65001 >nul
-title 문제 진단
+title Diagnose
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo   [!] 먼저 실행.bat 을 한 번 실행하세요.
+    echo.
+    echo   [!] Not installed here yet.
+    echo       Run the setup file first.
+    echo.
     pause
     exit /b 1
 )
 
 echo.
-set /p URL="진단할 영상 주소 (그냥 Enter 치면 환경만 점검): "
+set /p URL="Video URL (press Enter to check environment only): "
 echo.
-
 if "%URL%"=="" (
     ".venv\Scripts\python.exe" ytdl.py --check
 ) else (
