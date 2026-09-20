@@ -26,8 +26,12 @@ COPY_FILES = [
     "youtube_downloader.py",
     "ytdl_core.py",
     "ytdl.py",
+    "ui_theme.py",
     "README.md",
 ]
+
+# 화면을 예쁘게 그리는 라이브러리. 없어도 기본 모양으로 돌아간다.
+PACKAGES = ["yt-dlp", "customtkinter"]
 
 
 def say(msg: str = "") -> None:
@@ -86,6 +90,11 @@ def copy_files(target: Path) -> int:
         src = HERE / name
         if src.is_file():
             shutil.copy2(src, target / name)
+
+    # 아이콘 폴더
+    src_assets = HERE / "assets"
+    if src_assets.is_dir():
+        shutil.copytree(src_assets, target / "assets", dirs_exist_ok=True)
     return n
 
 
@@ -116,6 +125,11 @@ def install_ytdlp(target: Path) -> bool:
         say("  [!] yt-dlp 를 받지 못했습니다. 인터넷 연결을 확인하세요.")
         say((proc.stderr or proc.stdout or "").strip()[:500])
         return False
+
+    # 화면 라이브러리는 실패해도 넘어간다. 없으면 기본 모양으로 뜬다.
+    say("        화면 구성 요소를 받는 중입니다...")
+    run([py, "-m", "pip", "install", "--upgrade", "customtkinter",
+         "--quiet", "--disable-pip-version-check"], timeout=300)
     run([py, "-m", "yt_dlp", "--rm-cache-dir"], timeout=120)
     return True
 
@@ -138,8 +152,9 @@ def make_shortcut(target: Path) -> Path | None:
     arg = target / "app.py"
 
     # 경로를 환경변수로 넘긴다. 명령줄 따옴표 escape 를 아예 피하기 위해서다.
+    ico = target / "assets" / "icon.ico"
     env = dict(os.environ, SC_LNK=str(lnk), SC_EXE=str(exe),
-               SC_ARG=str(arg), SC_DIR=str(target))
+               SC_ARG=str(arg), SC_DIR=str(target), SC_ICO=str(ico))
     ps = (
         "$q=[char]34;"
         "$w=New-Object -ComObject WScript.Shell;"
@@ -148,6 +163,7 @@ def make_shortcut(target: Path) -> Path | None:
         "$s.Arguments=$q+$env:SC_ARG+$q;"
         "$s.WorkingDirectory=$env:SC_DIR;"
         "$s.Description='Video Downloader';"
+        "if (Test-Path $env:SC_ICO) { $s.IconLocation=$env:SC_ICO }"
         "$s.Save()"
     )
     try:

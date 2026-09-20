@@ -160,8 +160,23 @@ class _Splash:
 # 사전 점검
 # --------------------------------------------------------------------------
 
+def _ensure_ctk() -> None:
+    """화면 라이브러리가 없으면 한 번 받아 둔다. 실패해도 그냥 넘어간다.
+    없으면 기본 모양으로 뜨지 프로그램이 안 뜨지는 않는다."""
+    if importlib.util.find_spec("customtkinter") is not None:
+        return
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "customtkinter",
+             "--quiet", "--disable-pip-version-check"],
+            capture_output=True, timeout=300, creationflags=NO_WINDOW)
+    except Exception:
+        pass
+
+
 def preflight() -> None:
     """yt_dlp import 전에 최신화한다. 실패해도 진행한다 (인터넷이 없을 수도 있다)."""
+    _ensure_ctk()
     installed = _installed()
     if installed is None:
         _install_fresh()

@@ -2,6 +2,8 @@
 
 `HTTP Error 403: Forbidden` 을 자동으로 우회하는 유튜브 다운로더입니다.
 
+설치하면 바탕화면에 아이콘이 생깁니다. 그것만 누르면 됩니다.
+
 ## 설치 (처음 한 번만)
 
 **1단계.** 파일 탐색기에서 이 폴더를 엽니다. 지금 이 README 가 있는 폴더입니다.
@@ -142,9 +144,14 @@ youtube-downloader/
 ├── 업데이트.bat              yt-dlp 수동 최신화
 ├── 문제진단.bat              진단
 ├── app.py                    바로가기 진입점 (오류를 창으로 보여줌)
-├── youtube_downloader.py     GUI
+├── youtube_downloader.py     화면
+├── ui_theme.py               색·여백 모음
 ├── ytdl.py                   명령줄 + 진단
 ├── ytdl_core.py              다운로드 엔진 (403 우회 로직)
+├── assets/
+│   ├── icon.ico              바탕화면·작업표시줄 아이콘
+│   ├── icon.png              원본 (1024px)
+│   └── make_icon.py          아이콘 생성기
 └── requirements.txt
 ```
 
