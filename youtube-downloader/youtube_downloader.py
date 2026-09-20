@@ -147,6 +147,8 @@ class App:
         self.btn_cancel = ttk.Button(f3, text="취소", command=self._cancel, width=12, state="disabled")
         self.btn_cancel.pack(side="left", padx=8)
         ttk.Button(f3, text="문제 진단", command=self._diagnose, width=12).pack(side="right")
+        self.btn_fix = ttk.Button(f3, text="🔧 자동 고치기", command=self._repair, width=16)
+        self.btn_fix.pack(side="right", padx=6)
 
         # --- 진행 ---
         self.progress = ttk.Progressbar(self.root, mode="determinate")
@@ -197,6 +199,23 @@ class App:
                     self.progress["value"] = rest[0]
                 elif kind == "done":
                     self._on_finish()
+                elif kind == "restart":
+                    self._do_restart()
+                    return
+                elif kind == "repair_failed":
+                    self.btn_fix.configure(state="normal")
+                    self.btn_go.configure(state="normal")
+                    self.status.set("고치기 실패 - 인터넷 연결을 확인하세요")
+                elif kind == "offer_repair":
+                    self.status.set("전부 403 으로 막혔습니다")
+                    if messagebox.askyesno(
+                        APP_TITLE,
+                        "모든 방법이 403 으로 막혔습니다.\n\n"
+                        "yt-dlp 가 낡은 것이 가장 흔한 원인입니다.\n"
+                        "지금 자동으로 고칠까요?\n\n"
+                        "(yt-dlp 최신화 → 캐시 정리 → 재시작)",
+                    ):
+                        self._repair(auto=True)
         except queue.Empty:
             pass
         self.root.after(80, self._pump)
@@ -275,6 +294,64 @@ class App:
             self._w("403 이 나도 android_vr / ios 클라이언트로 자동 우회합니다.", "dim")
             self._w("──────────────────────────────────────", "info")
 
+    def _repair(self, auto: bool = False):
+        """yt-dlp 를 올리고 캐시를 비운 뒤 프로그램을 다시 시작한다.
+
+        재시작이 필요한 이유: 이미 import 된 yt_dlp 모듈은 pip 로 올려도
+        현재 프로세스에서는 예전 코드가 그대로 돌기 때문이다.
+        """
+        if self.worker and self.worker.is_alive():
+            messagebox.showinfo(APP_TITLE, "다운로드가 끝난 뒤에 눌러 주세요.")
+            return
+
+        msg = ("yt-dlp 를 최신으로 올리고 캐시를 비웁니다.\n"
+               "끝나면 프로그램이 자동으로 다시 시작됩니다.\n\n"
+               "1분 정도 걸립니다. 계속할까요?")
+        if not messagebox.askyesno(APP_TITLE, msg):
+            return
+
+        self.btn_fix.configure(state="disabled")
+        self.btn_go.configure(state="disabled")
+        self.msgq.put(("status", "고치는 중..."))
+        threading.Thread(target=self._repair_work, daemon=True).start()
+
+    def _repair_work(self):
+        self._w("")
+        self._w("── 자동 고치기 ───────────────────────", "info")
+
+        before = core.installed_version()
+        ok, msg = core.upgrade_ytdlp(log=lambda m: self._w("  " + m, "dim"))
+        if not ok:
+            self._w(f"  ✗ {msg}", "bad")
+            self.msgq.put(("repair_failed",))
+            return
+
+        after = core.installed_version()
+        if before != after:
+            self._w(f"  ✓ yt-dlp {before} → {after}", "ok")
+        else:
+            self._w(f"  · yt-dlp {after} (이미 최신)", "dim")
+
+        core.clear_cache()
+        self._w("  ✓ 서명 캐시를 비웠습니다", "ok")
+        self._w("  프로그램을 다시 시작합니다...", "info")
+        self.msgq.put(("restart",))
+
+    def _do_restart(self):
+        self._save_settings()
+        try:
+            # launcher 가 6시간 캐시를 쓰므로, 방금 올린 걸 다시 확인하지 않게 한다
+            state = Path(__file__).resolve().parent / ".launcher_state.json"
+            import json, time as _t
+            state.write_text(json.dumps({"last_check": _t.time()}), encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
     def _start(self):
         if self.worker and self.worker.is_alive():
             return
@@ -315,6 +392,7 @@ class App:
         self._w(f"── 총 {len(urls)}개 · {out_dir}", "info")
 
         ok = fail = 0
+        blocked = 0          # 403 으로 막힌 건수
         preferred: core.Strategy | None = None
 
         for i, url in enumerate(urls, 1):
@@ -359,12 +437,18 @@ class App:
                 self._w(f"    ✓ {name}{suffix}", "ok")
             else:
                 fail += 1
+                if res.error and "403" in res.error:
+                    blocked += 1
                 self._w(f"    ✗ {res.error}", "bad")
 
         self.msgq.put(("progress", 100))
         self._w(f"── 완료: 성공 {ok} / 실패 {fail}", "ok" if fail == 0 else "warn")
         self.msgq.put(("status", f"끝났습니다 — 성공 {ok}개, 실패 {fail}개"))
         self.msgq.put(("done",))
+
+        # 전부 403 으로 막혔으면 물어보지 말고 고치기를 제안한다
+        if ok == 0 and blocked > 0 and not self.cancel_flag.is_set():
+            self.msgq.put(("offer_repair",))
 
     def _on_finish(self):
         self.btn_go.configure(state="normal")

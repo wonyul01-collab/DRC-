@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
+import sys
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
@@ -75,9 +77,12 @@ class Strategy:
 STRATEGIES: tuple[Strategy, ...] = (
     Strategy("기본", (), True, "yt-dlp 가 알아서 고름 - 화질 최상"),
     Strategy("tv", ("tv",), True, "TV 클라이언트 - 화질 좋음"),
-    Strategy("android_vr", ("android_vr",), False, "JS·쿠키 불필요 - 403 우회용"),
-    Strategy("ios", ("ios",), False, "JS·쿠키 불필요 - 403 우회용"),
-    Strategy("visionos", ("visionos",), False, "JS·쿠키 불필요 - 최후 수단"),
+    Strategy("android_vr", ("android_vr",), False, "JS·쿠키 불필요 - 403 우회 주력"),
+    Strategy("ios", ("ios",), False, "JS·쿠키 불필요"),
+    Strategy("android", ("android",), False, "JS·쿠키 불필요"),
+    Strategy("visionos", ("visionos",), False, "JS·쿠키 불필요"),
+    Strategy("tv_simply", ("tv_simply",), False, "쿠키 불필요"),
+    Strategy("mweb", ("mweb",), True, "모바일 웹"),
     Strategy("web_safari", ("web_safari",), True, "쿠키가 있을 때 유효"),
 )
 
@@ -205,6 +210,72 @@ def check_environment(check_updates: bool = True) -> Environment:
         )
 
     return env
+
+
+# --------------------------------------------------------------------------
+# 자가 수리
+# --------------------------------------------------------------------------
+
+def upgrade_ytdlp(log: Callable[[str], None] = print) -> tuple[bool, str]:
+    """
+    yt-dlp 를 최신 나이틀리로 올린다.
+
+    주의: 이미 import 된 yt_dlp 모듈은 이 호출로 바뀌지 않는다.
+    새 버전을 실제로 쓰려면 프로세스를 다시 시작해야 한다.
+    그래서 app.py 가 yt_dlp 를 import 하기 전에 이걸 부르고,
+    실행 중에 부를 때는 재시작을 동반한다.
+    """
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--pre",
+           "yt-dlp", "--disable-pip-version-check", "--quiet"]
+    log("yt-dlp 를 최신으로 올리는 중... (1분 정도 걸립니다)")
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=300,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except subprocess.TimeoutExpired:
+        return False, "시간이 너무 오래 걸려 중단했습니다. 인터넷 연결을 확인하세요."
+    except Exception as e:
+        return False, f"업데이트를 실행하지 못했습니다: {e}"
+
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        return False, "업데이트 실패: " + (tail[-1] if tail else "원인 불명")
+
+    return True, "업데이트 완료."
+
+
+def clear_cache(log: Callable[[str], None] = print) -> bool:
+    """낡은 서명 캐시를 비운다."""
+    try:
+        if yt_dlp is not None:
+            yt_dlp.YoutubeDL({"quiet": True}).cache.remove()
+            return True
+    except Exception:
+        pass
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "yt_dlp", "--rm-cache-dir"],
+            capture_output=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return True
+    except Exception:
+        return False
+
+
+def installed_version() -> str | None:
+    """현재 프로세스가 아니라 디스크에 깔린 버전을 본다 (업데이트 직후 확인용)."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c",
+             "import yt_dlp,sys; sys.stdout.write(yt_dlp.version.__version__)"],
+            capture_output=True, text=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return proc.stdout.strip() or None
+    except Exception:
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -381,7 +452,7 @@ def _friendly(msg: str) -> str:
     if "403" in low or "forbidden" in low:
         return (
             "모든 방법으로 시도했지만 YouTube 가 계속 거부했습니다 (403). "
-            "업데이트.bat 을 실행해 yt-dlp 를 최신으로 올린 뒤 다시 해보세요."
+            "아래 [자동 고치기] 버튼을 누르세요 - yt-dlp 를 올리고 다시 시작합니다."
         )
     if "private video" in low:
         return "비공개 영상입니다."
@@ -396,7 +467,7 @@ def _friendly(msg: str) -> str:
     if "not available in your country" in low:
         return "지역 제한 영상입니다."
     if "unable to extract" in low or "player response" in low:
-        return "영상 정보를 읽지 못했습니다. yt-dlp 업데이트가 필요합니다 (업데이트.bat)."
+        return "영상 정보를 읽지 못했습니다. [자동 고치기] 버튼을 누르세요."
     if "ffmpeg" in low:
         return "ffmpeg 가 필요합니다. winget install Gyan.FFmpeg 로 설치하세요."
     if "no space left" in low:
