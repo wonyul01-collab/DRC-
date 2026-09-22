@@ -72,6 +72,18 @@
 
 ---
 
+## 콘텐츠·소재 자동화
+
+숫자 리포트가 "무엇이 문제인지"를 찾아내면, `content-agent-team` 스킬이
+그중 콘텐츠·소재로 풀 수 있는 문제(전환 안 되는 상품, 광고가 안 붙은
+잘 팔리는 상품 등)를 골라 카피·구성 초안을 만든다. 실제 채널 업로드는
+항상 사람이 검토한 뒤 직접 한다.
+
+방법론과 설계 배경은 [docs/MARKETING_AGENT_GUIDE.md](docs/MARKETING_AGENT_GUIDE.md),
+사용법은 [skills/content-agent-team/SKILL.md](skills/content-agent-team/SKILL.md)에 있다.
+
+---
+
 ## 빠른 시작
 
 ```bash
@@ -135,6 +147,7 @@ python3 -m adops report  --date DATE --mode monthly
 | [docs/SETUP.md](docs/SETUP.md) | 설치, 데이터 연결, 스킬 등록, 메일·크론 설정 |
 | [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | 채널별 리포트 받는 법, CSV 컬럼 매핑, API 자격증명 |
 | [docs/METRICS.md](docs/METRICS.md) | 모든 지표의 정의와 계산식 |
+| [docs/MARKETING_AGENT_GUIDE.md](docs/MARKETING_AGENT_GUIDE.md) | 콘텐츠 에이전트팀 방법론과 설계 배경 |
 
 ---
 
@@ -154,7 +167,8 @@ adops/              계산 엔진 (표준 라이브러리만)
 
 skills/             Hermes 스킬
 ├── ad-daily-report/
-└── ad-monthly-close/
+├── ad-monthly-close/
+└── content-agent-team/
 
 tests/              python3 -m unittest discover -s tests
 tools/              샘플 데이터 생성기

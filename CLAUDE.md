@@ -29,6 +29,7 @@
 | 서식 — 채널 상품코드 매핑 | https://github.com/wonyul01-collab/DRC-/blob/main/templates/sku_map.csv |
 | 준비 안내 | https://github.com/wonyul01-collab/DRC-/blob/main/templates/README.md |
 | 설치·운영 문서 | https://github.com/wonyul01-collab/DRC-/blob/main/docs/SETUP.md |
+| 마케팅 에이전트팀 가이드 | https://github.com/wonyul01-collab/DRC-/blob/main/docs/MARKETING_AGENT_GUIDE.md |
 | 구글 앱 비밀번호 발급 | https://myaccount.google.com/apppasswords |
 
 ## 명령을 줄 때
