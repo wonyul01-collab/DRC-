@@ -1,7 +1,7 @@
 # 서윤의 성분노트 채널 전환 키트 (기존 미사용 채널 → 서윤)
 
 ## 1. 이미지
-- 배너 (2560×1440, 가운데 안전영역에 핵심 배치): https://d2ol7oe51mr4n9.cloudfront.net/user_38aluNx0qotIdo6RO5aZ6KNWNta/46e8f70b-c0a4-4ba6-8b46-4f3a6c416fbb.png
+- 배너 (2560×1440, 가운데 안전영역에 핵심 배치): https://d2ol7oe51mr4n9.cloudfront.net/user_38aluNx0qotIdo6RO5aZ6KNWNta/0f7ec561-9609-4023-805f-dd26429f0c29.png
 - 프로필 (800×800): https://d2ol7oe51mr4n9.cloudfront.net/user_38aluNx0qotIdo6RO5aZ6KNWNta/c45974e4-b21d-4267-82eb-030fd4b6c6f2.png
 
 ## 2. 채널 이름 / 핸들
