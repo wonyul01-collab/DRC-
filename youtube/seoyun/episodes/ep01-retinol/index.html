@@ -1,0 +1,240 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Noto+Serif+KR:wght@900&family=Nanum+Pen+Script&display=block" rel="stylesheet">
+<script src="dur.js"></script>
+<style>
+:root{--paper:#F3EFE6;--ink:#161616;--hl:#FFD84A;--red:#E5422B;--blue:#2E5BFF;--box:#e9dfc9;--card:#fffdf8;--mute:#777}
+*{margin:0;padding:0;box-sizing:border-box;animation-play-state:paused!important}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--paper);color:var(--ink);font-family:"Noto Sans KR"}
+.serif{font-family:"Noto Serif KR";font-weight:900;letter-spacing:-.02em}.pen{font-family:"Nanum Pen Script";color:var(--red)}
+.scene{position:absolute;inset:0;visibility:hidden;background:var(--paper);animation:wipe .4s cubic-bezier(.7,0,.2,1) calc(var(--s) - .3s) both}
+@keyframes wipe{from{clip-path:inset(0 0 0 100%)}to{clip-path:inset(0 0 0 0)}}
+.pop{animation:pop .45s cubic-bezier(.2,1.4,.4,1) var(--t) both}@keyframes pop{from{opacity:0;transform:translateY(40px) scale(.94)}to{opacity:1;transform:none}}
+.fade{animation:fade .5s ease var(--t) both}@keyframes fade{from{opacity:0}to{opacity:1}}
+.slideL{animation:slideL .5s cubic-bezier(.2,.9,.3,1) var(--t) both}@keyframes slideL{from{opacity:0;transform:translateX(-60px)}to{opacity:1;transform:none}}
+.stamp{animation:stamp .35s cubic-bezier(.3,1.6,.5,1) var(--t) both}@keyframes stamp{from{opacity:0;transform:scale(1.8)}to{opacity:1;transform:scale(1)}}
+.hl{background:linear-gradient(var(--hl),var(--hl)) no-repeat 0 85%/0% 50%;animation:hl .6s ease var(--t) both;padding:0 .08em}@keyframes hl{to{background-size:100% 50%}}
+.draw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .6s ease var(--t) both}@keyframes draw{to{stroke-dashoffset:0}}
+.kb{animation:kb var(--w) linear calc(var(--s) - .3s) both}@keyframes kb{from{transform:scale(1.02)}to{transform:scale(1.1) translate(-1.5%,-1%)}}
+.cut{filter:drop-shadow(5px 0 0 #fff) drop-shadow(-5px 0 0 #fff) drop-shadow(0 5px 0 #fff) drop-shadow(0 -5px 0 #fff) drop-shadow(14px 18px 18px rgba(0,0,0,.28))}
+.abs{position:absolute}
+.tag{position:absolute;background:#fff;border:4px solid var(--ink);padding:10px 22px;font-weight:900;font-size:40px;box-shadow:8px 8px 0 var(--ink);white-space:nowrap}
+.dots{position:absolute;background-image:radial-gradient(var(--blue) 3px,transparent 3.5px);background-size:22px 22px}
+.big{position:absolute;font-family:"Noto Serif KR";font-weight:900;font-size:120px}
+.strip{position:absolute;background:var(--ink);color:var(--paper);font-weight:900;padding:14px 34px;font-size:46px}
+.photo{position:absolute;background:#fff;padding:16px;box-shadow:0 30px 60px rgba(0,0,0,.25)}.photo .clip{width:100%;height:100%;overflow:hidden}.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.chip{display:inline-block;font-weight:700;font-size:34px;padding:12px 26px;border:4px solid var(--ink);background:#fffdf8;margin-right:18px;box-shadow:6px 6px 0 var(--ink)}
+.src{position:absolute;right:40px;bottom:26px;font-size:20px;font-weight:700;background:rgba(243,239,230,.92);padding:4px 12px;color:#555}
+.card{position:absolute;background:var(--card);border:5px solid var(--ink);box-shadow:14px 14px 0 var(--ink)}
+.small{font-size:26px;color:var(--mute);font-weight:700}
+table.cmp{position:absolute;left:150px;top:660px;width:1640px;border-collapse:collapse;font-size:38px;font-weight:900;background:#fffdf8;border:5px solid var(--ink);box-shadow:12px 12px 0 var(--ink);text-align:center}
+table.cmp td{padding:12px 20px}
+svg.a{position:absolute;overflow:visible}
+.day{width:200px;height:210px;border:5px solid var(--ink);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-weight:900;box-shadow:8px 8px 0 var(--ink)}
+.day b{font-size:44px}.day span{font-size:28px;padding:6px 12px}
+#logo{position:absolute;top:34px;left:48px;z-index:50;background:var(--paper);border:3px solid var(--ink);padding:4px 14px;font-weight:900;font-size:26px}#logo b{color:var(--red)}
+#disc{position:absolute;top:38px;right:48px;z-index:50;font-size:20px;font-weight:700;background:var(--ink);color:#fff;padding:4px 12px}
+#bar{position:absolute;left:0;bottom:0;height:8px;background:var(--red);z-index:50;width:0}
+#grain{position:absolute;inset:-50px;z-index:40;pointer-events:none;opacity:.11;mix-blend-mode:multiply;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>")}
+</style></head><body>
+<div id="logo">서윤의 성분노트<b>.</b></div><div id="disc">AI 캐릭터 · 정보 제공용</div><div id="bar"></div><div id="grain"></div>
+
+<!-- 1 HOOK -->
+<section class="scene">
+ <div class="dots" style="left:-60px;top:640px;width:1200px;height:500px;transform:rotate(-5deg);opacity:.8"></div>
+ <div class="abs pop" style="--t:calc(var(--s) + 0s);left:190px;top:250px"><div style="transform:rotate(-6deg)"><img class="cut" src="img/r01_cut.png" style="height:600px"></div></div>
+ <div class="abs pop" style="--t:calc(var(--s) + .15s);left:460px;top:225px"><div style="transform:rotate(2deg)"><img class="cut" src="img/r03_cut.png" style="height:620px"></div></div>
+ <div class="abs pop" style="--t:calc(var(--s) + .3s);left:735px;top:380px"><div style="transform:rotate(7deg)"><img class="cut" src="img/r05_cut.png" style="height:470px"></div></div>
+ <div class="big pop" style="--t:calc(var(--s) + var(--d) * .1);left:215px;top:110px">0.1</div>
+ <div class="big pop" style="--t:calc(var(--s) + var(--d) * .16);left:480px;top:90px">0.3</div>
+ <div class="big stamp" style="--t:calc(var(--s) + var(--d) * .22);left:800px;top:225px;color:var(--red)">0.5</div>
+ <div style="position:absolute;left:1200px;top:280px">
+  <div class="pen fade" style="--t:calc(var(--s) + .1s);font-size:100px;color:var(--ink)">레티놀,</div>
+  <div class="serif pop" style="--t:calc(var(--s) + .4s);font-size:120px;line-height:1.15">숫자 클수록<br><span class="hl" style="--t:calc(var(--s) + 1.2s)">효과도 클까?</span></div>
+  <div class="chip pop" style="--t:calc(var(--s) + var(--d) * .72);margin-top:40px;background:var(--hl)">공식 상품정보로 비교</div>
+ </div>
+ <svg class="a" style="left:1010px;top:320px" width="220" height="200"><path class="draw" pathLength="1" style="--t:calc(var(--s) + var(--d) * .3)" d="M200 30 C140 20 80 60 40 150 M22 110 L38 160 L82 132" fill="none" stroke="#E5422B" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+ <div class="src">이미지 출처: 코스알엑스 공식몰</div>
+</section>
+
+<!-- 2 VLOG -->
+<section class="scene" style="background:#111">
+ <img class="vlog" data-off="0" src="img/vlog/0001.jpg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+ <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(15,13,10,.82) 0%,rgba(15,13,10,.35) 38%,rgba(15,13,10,0) 60%)"></div>
+ <div style="position:absolute;left:120px;bottom:120px;color:#fff">
+  <div class="slideL" style="--t:calc(var(--s) + .3s);font-weight:900;font-size:34px;color:var(--ink)"><span style="background:var(--hl);padding:6px 16px">아침마다 뭘 바를지 고민될 때</span></div>
+  <div class="serif slideL" style="--t:calc(var(--s) + var(--d) * .58);font-size:96px;line-height:1.2;margin-top:18px">광고보다 먼저,<br><span style="color:var(--hl)">상자 뒷면 표시</span></div>
+ </div>
+ <div class="src" style="background:rgba(0,0,0,.55);color:#ddd">AI로 생성한 연출 영상</div>
+</section>
+
+<!-- 3 INTRO -->
+<section class="scene" style="background:#222">
+ <div style="position:absolute;inset:0;overflow:hidden"><img src="img/youtube.jpg" class="kb" style="width:100%;height:100%;object-fit:cover;object-position:50% 30%"></div>
+ <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,13,10,.85) 0%,rgba(15,13,10,.55) 45%,rgba(15,13,10,0) 75%)"></div>
+ <div style="position:absolute;left:140px;top:300px;color:#fff">
+  <div class="slideL" style="--t:calc(var(--s) + .1s);font-weight:900;font-size:32px;color:var(--ink)"><span style="background:var(--hl);padding:6px 16px">광고 말고 성분표만 봅니다</span></div>
+  <div class="serif slideL" style="--t:calc(var(--s) + .3s);font-size:210px;line-height:1.15">서윤</div></div>
+ <div style="position:absolute;left:140px;bottom:170px"><span class="chip pop" style="--t:calc(var(--s) + var(--d) * .45)">AI 캐릭터</span><span class="chip pop" style="--t:calc(var(--s) + var(--d) * .6);background:var(--hl)">공식 정보 기준</span></div>
+</section>
+
+<!-- 4 LABEL -->
+<section class="scene">
+  <div class="card pop" style="--t:calc(var(--s) + 0s);left:160px;top:150px;width:800px;height:800px;background:var(--box)">
+    <div class="small" style="position:absolute;top:30px;left:40px;color:#8a7d63">상자 뒷면</div>
+    <div style="position:absolute;top:100px;left:40px;right:40px">
+      <div style="height:22px;background:#cfc3a8;margin:18px 0;width:92%"></div>
+      <div style="height:22px;background:#cfc3a8;margin:18px 0;width:80%"></div>
+      <div style="height:22px;background:#cfc3a8;margin:18px 0;width:86%"></div>
+    </div>
+    <div class="pop" style="--t:calc(var(--s) + var(--d) * .1);position:absolute;top:290px;left:150px;border:7px solid var(--ink);border-radius:18px;padding:22px 44px;background:var(--card);font-weight:900;font-size:64px">기능성화장품</div>
+    <svg style="position:absolute;top:240px;left:90px;overflow:visible" width="620" height="230"><ellipse class="draw" pathLength="1" cx="310" cy="115" rx="320" ry="120" fill="none" stroke="#E5422B" stroke-width="10" style="--t:calc(var(--s) + var(--d) * .18)"/></svg>
+    <div style="position:absolute;top:560px;left:50px;font-size:46px;font-weight:900"><span class="hl" style="--t:calc(var(--s) + var(--d) * .3)">“피부의 주름 개선에 도움을 줌”</span></div>
+    <div style="position:absolute;top:660px;left:40px;right:40px"><div style="height:22px;background:#cfc3a8;width:70%"></div></div>
+  </div>
+  <div style="position:absolute;left:1080px;top:300px">
+    <div class="serif pop" style="--t:calc(var(--s) + var(--d) * .6);font-size:150px;line-height:1.1">= 식약처</div>
+    <div class="serif pop" style="--t:calc(var(--s) + var(--d) * .7);font-size:100px;line-height:1.3"><span class="hl" style="--t:calc(var(--s) + var(--d) * .75)">심사 또는 보고</span></div>
+    <div class="small fade" style="--t:calc(var(--s) + var(--d) * .88);margin-top:40px;font-size:32px">를 거친 제품이라는 뜻</div>
+  </div>
+  <div class="src">기능성화장품 표시 제도 (화장품법) 기준 설명</div>
+</section>
+
+<!-- 5 FOUR -->
+<section class="scene">
+  <div style="position:absolute;left:150px;top:150px;display:flex;align-items:center;gap:36px">
+    <div class="serif pop" style="--t:calc(var(--s) + .1s);font-size:84px">주름 개선 기능성 고시 성분</div>
+    <div class="serif stamp" style="--t:calc(var(--s) + var(--d) * .8);font-size:110px;width:170px;height:170px;border-radius:50%;background:var(--hl);display:flex;align-items:center;justify-content:center;border:6px solid var(--ink)">4</div>
+  </div>
+  <div class="card pop" style="--t:calc(var(--s) + var(--d) * .3);left:150px;top:400px;width:370px;height:480px;padding:36px">
+    <div class="small">01</div><div class="serif" style="font-size:64px;margin:24px 0 30px">레티놀</div>
+    <div style="font-size:30px;font-weight:700;line-height:1.5">비타민A 계열</div></div>
+  <div class="card pop" style="--t:calc(var(--s) + var(--d) * .4);left:570px;top:400px;width:370px;height:480px;padding:36px">
+    <div class="small">02</div><div class="serif" style="font-size:46px;margin:24px 0 30px;line-height:1.25">레티닐<br>팔미테이트</div>
+    <div style="font-size:30px;font-weight:700;line-height:1.5">비타민A 계열</div></div>
+  <div class="card pop" style="--t:calc(var(--s) + var(--d) * .54);left:990px;top:400px;width:370px;height:480px;padding:36px">
+    <div class="small">03</div><div class="serif" style="font-size:64px;margin:24px 0 30px">아데노신</div>
+    <div style="font-size:30px;font-weight:700;line-height:1.5">오늘 볼<br>0.1·0.3 크림에도</div></div>
+  <div class="card pop" style="--t:calc(var(--s) + var(--d) * .64);left:1410px;top:400px;width:370px;height:480px;padding:36px">
+    <div class="small">04</div><div class="serif" style="font-size:30px;margin:28px 0 34px;line-height:1.35;word-break:keep-all">폴리에톡실레이티드<br>레틴아마이드</div>
+    <div style="font-size:30px;font-weight:700;line-height:1.5">이름이 가장 길어요</div></div>
+  <div class="src">출처: 식약처 고시 기능성 원료 · 보도자료 기준</div>
+</section>
+
+<!-- 6 INFO01 -->
+<section class="scene">
+ <div class="abs pop" style="--t:calc(var(--s) + 0s);left:110px;top:150px"><div style="background:#fff;padding:14px;box-shadow:20px 26px 40px rgba(0,0,0,.25);transform:rotate(-1.2deg)"><div style="position:relative;width:900px">
+   <img src="img/info01c.jpg" style="width:900px;display:block">
+   <svg class="a" style="left:0;top:0" width="900" height="700">
+    <ellipse class="draw" pathLength="1" style="--t:calc(var(--s) + var(--d) * .2)" cx="148" cy="211" rx="56" ry="22" fill="none" stroke="#E5422B" stroke-width="7"/>
+    <rect class="fade" style="--t:calc(var(--s) + var(--d) * .55)" x="801" y="274" width="64" height="20" fill="#FFD84A" opacity=".6"/>
+    <rect class="fade" style="--t:calc(var(--s) + var(--d) * .78)" x="138" y="308" width="48" height="20" fill="#FFD84A" opacity=".6"/>
+   </svg></div></div></div>
+ <div class="abs pop" style="--t:calc(var(--s) + .3s);left:1150px;top:110px"><div style="transform:rotate(-6deg)"><img class="cut" src="img/r01_cut.png" style="height:330px"></div></div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .2);left:1360px;top:170px;font-size:38px">주름개선 <span class="hl" style="--t:calc(var(--s) + var(--d) * .26)">기능성 ✔</span></div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .55);left:1180px;top:520px;font-size:44px">레티놀 <span class="hl" style="--t:calc(var(--s) + var(--d) * .6)">0.1%</span></div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .78);left:1260px;top:660px;font-size:44px">+ <span class="hl" style="--t:calc(var(--s) + var(--d) * .83)">아데노신</span></div>
+ <div class="pen fade" style="--t:calc(var(--s) + var(--d) * .88);position:absolute;left:1250px;top:810px;font-size:64px;transform:rotate(-3deg)">고시 성분이 두 개!</div>
+ <div class="src">정보 출처: 코스알엑스 공식몰 상품정보 · 2026.10 확인</div>
+</section>
+
+<!-- 7 INFO05 -->
+<section class="scene">
+ <div class="abs pop" style="--t:calc(var(--s) + 0s);left:110px;top:150px"><div style="background:#fff;padding:14px;box-shadow:20px 26px 40px rgba(0,0,0,.25);transform:rotate(-1.5deg)"><div style="position:relative;width:900px">
+   <img src="img/info05.jpg" style="width:900px;display:block">
+   <svg class="a" style="left:0;top:0" width="900" height="740"><rect class="fade" style="--t:calc(var(--s) + var(--d) * .3)" x="318" y="372" width="82" height="22" fill="#FFD84A" opacity=".55"/><ellipse class="draw" pathLength="1" style="--t:calc(var(--s) + var(--d) * .6)" cx="146" cy="340" rx="54" ry="22" fill="none" stroke="#E5422B" stroke-width="7"/></svg></div></div></div>
+ <div class="abs pop" style="--t:calc(var(--s) + .3s);left:1160px;top:110px"><div style="transform:rotate(8deg)"><img class="cut" src="img/r05_cut.png" style="height:300px"></div></div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .3);left:1420px;top:170px;font-size:38px">레티놀 <span class="hl" style="--t:calc(var(--s) + var(--d) * .36)">0.5%</span></div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .55);left:1380px;top:290px;font-size:38px">기능성: <span style="color:var(--red)">해당 없음</span></div>
+ <div class="pop" style="--t:calc(var(--s) + var(--d) * .68);position:absolute;left:1180px;top:520px;width:420px;height:420px;border-radius:50%;border:16px solid var(--ink);background:#fff;box-shadow:16px 18px 0 rgba(0,0,0,.18);display:flex;flex-direction:column;align-items:center;justify-content:center">
+   <div style="font-size:38px;font-weight:700;color:#555">기능성 화장품 여부</div><div style="font-size:82px;font-weight:900;color:var(--red)">해당 없음</div></div>
+ <div class="pop" style="--t:calc(var(--s) + var(--d) * .7);position:absolute;left:1515px;top:870px;width:40px;height:190px;background:var(--ink);transform:rotate(-40deg);border-radius:12px"></div>
+ <div class="pen fade" style="--t:calc(var(--s) + var(--d) * .85);position:absolute;left:1640px;top:560px;font-size:64px;line-height:1">함량 높아도<br>'주름개선'<br>표시 없음</div>
+ <div class="src">정보 출처: 코스알엑스 공식몰 상품정보 · 2026.10 확인</div>
+</section>
+
+<!-- 8 COMPARE -->
+<section class="scene">
+ <div class="strip slideL" style="--t:calc(var(--s) + .05s);left:150px;top:110px">같은 레티놀 라인, 표시는 다르다</div>
+ <div class="abs pop" style="--t:calc(var(--s) + .2s);left:330px;top:205px"><img class="cut" src="img/r01_cut.png" style="height:400px"></div>
+ <div class="abs pop" style="--t:calc(var(--s) + .35s);left:860px;top:205px"><img class="cut" src="img/r03_cut.png" style="height:400px"></div>
+ <div class="abs pop" style="--t:calc(var(--s) + .5s);left:1340px;top:280px"><img class="cut" src="img/r05_cut.png" style="height:315px"></div>
+ <div class="tag pop" style="--t:calc(var(--s) + .6s);left:270px;top:560px;font-size:32px;transform:rotate(-4deg)">0.1 크림 ₩23,000</div>
+ <div class="tag pop" style="--t:calc(var(--s) + .7s);left:800px;top:575px;font-size:32px;transform:rotate(3deg)">0.3 크림 ₩24,800</div>
+ <div class="tag pop" style="--t:calc(var(--s) + .8s);left:1300px;top:565px;font-size:32px;transform:rotate(-3deg)">0.5 오일 ₩23,000</div>
+ <table class="cmp">
+  <tr class="fade" style="--t:calc(var(--s) + var(--d) * .1);background:var(--ink);color:var(--paper)"><td style="width:440px;text-align:left;padding-left:26px">항목</td><td>0.1 크림</td><td>0.3 크림</td><td>0.5 오일</td></tr>
+  <tr class="fade" style="--t:calc(var(--s) + var(--d) * .15)"><td style="text-align:left;padding-left:26px">레티놀 함량</td><td>0.1%</td><td>0.3%</td><td><span class="hl" style="--t:calc(var(--s) + var(--d) * .2)">0.5%</span></td></tr>
+  <tr class="fade" style="--t:calc(var(--s) + var(--d) * .3);background:#f6f1e6"><td style="text-align:left;padding-left:26px">주름개선 기능성</td><td>✔</td><td>✔</td><td style="color:var(--red)">✘ 해당 없음</td></tr>
+  <tr class="fade" style="--t:calc(var(--s) + var(--d) * .55)"><td style="text-align:left;padding-left:26px">아데노신</td><td style="color:var(--red)">●</td><td style="color:var(--red)">●</td><td>○</td></tr>
+ </table>
+ <div class="src">출처: 코스알엑스 공식몰 상품정보 · 정가 기준 (2026.10)</div>
+</section>
+
+<!-- 9 MEANING -->
+<section class="scene">
+ <div class="dots" style="right:-60px;bottom:-40px;width:760px;height:380px;transform:rotate(-6deg);opacity:.8"></div>
+ <div class="photo pop" style="--t:calc(var(--s) + 0s);left:150px;top:150px;width:600px;height:800px;transform:rotate(-2deg)"><div class="clip"><img src="img/notes.jpg" class="kb"></div></div>
+ <div style="position:absolute;left:870px;top:200px">
+  <div class="pen fade" style="--t:calc(var(--s) + .1s);font-size:90px">오해하지 마세요</div>
+  <div class="serif pop" style="--t:calc(var(--s) + .3s);font-size:104px;line-height:1.2">표시 없음 <span style="color:var(--red)">≠</span><br>나쁜 제품</div>
+ </div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .48);left:870px;top:620px;font-size:40px">주름 개선을 기대한다면?</div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .7);left:930px;top:760px;font-size:44px;background:var(--hl)">→ 효능 인정 <span style="color:var(--red)">표시</span>부터 확인</div>
+</section>
+
+<!-- 10 USAGE -->
+<section class="scene">
+ <div class="photo pop" style="--t:calc(var(--s) + 0s);left:120px;top:250px;width:900px;height:538px;transform:rotate(-1.5deg)"><div class="clip"><img class="vlog" data-off="8.6" src="img/vlog/0001.jpg"></div></div>
+ <div class="pen fade" style="--t:calc(var(--s) + .2s);position:absolute;left:150px;top:140px;font-size:84px;transform:rotate(-3deg)">레티놀 시작법</div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .1);left:1120px;top:220px">① 처음엔 <span class="hl" style="--t:calc(var(--s) + var(--d) * .14)">밤에</span></div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .22);left:1160px;top:370px">② 이틀에 한 번</div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .34);left:1140px;top:520px">③ 조금씩</div>
+ <div class="tag pop" style="--t:calc(var(--s) + var(--d) * .52);left:1100px;top:670px;background:var(--hl)">④ 다음 날 아침 선크림</div>
+ <div class="src">일반적으로 권하는 사용법 · 개인차가 있으니 제품 안내를 따르세요 · 영상은 AI 연출</div>
+</section>
+
+<!-- 11 CAUTION -->
+<section class="scene">
+ <div class="strip slideL" style="--t:calc(var(--s) + .05s);left:150px;top:120px">같은 날 밤, 겹쳐 쓰지 않기</div>
+ <div style="position:absolute;left:300px;top:270px;display:flex;align-items:center;gap:40px">
+  <div class="card pop" style="--t:calc(var(--s) + var(--d) * .05);position:relative;padding:26px 50px;font-size:64px;font-weight:900">레티놀</div>
+  <div class="serif pop" style="--t:calc(var(--s) + var(--d) * .12);font-size:90px">+</div>
+  <div class="card pop" style="--t:calc(var(--s) + var(--d) * .15);position:relative;padding:26px 50px;font-size:64px;font-weight:900">AHA · BHA</div>
+  <div class="stamp" style="--t:calc(var(--s) + var(--d) * .4);font-size:56px;font-weight:900;color:#fff;background:var(--red);padding:16px 30px;transform:rotate(-6deg);border:5px solid var(--ink)">자극 주의</div>
+ </div>
+ <div class="pen fade" style="--t:calc(var(--s) + var(--d) * .2);position:absolute;left:1060px;top:470px;font-size:56px">각질 제거 제품</div>
+ <div style="position:absolute;left:150px;top:600px;display:flex;gap:30px">
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .62)"><b>월</b><span style="background:var(--hl)">레티놀</span></div>
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .65)"><b>화</b><span style="background:#dfe6ff">AHA·BHA</span></div>
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .68)"><b>수</b><span style="color:#888">쉬기</span></div>
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .71)"><b>목</b><span style="background:var(--hl)">레티놀</span></div>
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .74)"><b>금</b><span style="background:#dfe6ff">AHA·BHA</span></div>
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .77)"><b>토</b><span style="color:#888">쉬기</span></div>
+  <div class="day pop" style="--t:calc(var(--s) + var(--d) * .8)"><b>일</b><span style="background:var(--hl)">레티놀</span></div>
+ </div>
+ <div class="pen fade" style="--t:calc(var(--s) + var(--d) * .86);position:absolute;left:1400px;top:880px;font-size:64px">날을 나눠서!</div>
+ <div class="src">요일 배치는 예시입니다 · 피부 상태에 맞게 조절</div>
+</section>
+
+<!-- 12 OUTRO -->
+<section class="scene">
+ <div class="photo pop" style="--t:calc(var(--s) + 0s);left:150px;top:160px;width:600px;height:780px;transform:rotate(-2deg)"><div class="clip"><img src="img/cafe.jpg" class="kb"></div></div>
+ <div style="position:absolute;left:880px;top:200px">
+  <div class="pen fade" style="--t:calc(var(--s) + .1s);font-size:84px;color:var(--ink)">오늘의 결론</div>
+  <div class="serif pop" style="--t:calc(var(--s) + .3s);font-size:130px;line-height:1.15">숫자보다<br><span class="hl" style="--t:calc(var(--s) + .9s)">표시</span> 먼저</div>
+  <div class="fade" style="--t:calc(var(--s) + var(--d) * .3);margin-top:30px;font-size:30px;font-weight:700;color:#555">공식 상품정보 기준 · 2026.10 확인 · 효과를 판단하는 내용이 아닙니다</div>
+ </div>
+ <div class="slideL" style="--t:calc(var(--s) + var(--d) * .65);position:absolute;left:880px;top:800px;background:var(--hl);border:5px solid var(--ink);box-shadow:10px 10px 0 var(--ink);padding:24px 40px;font-size:44px;font-weight:900">다음 편 ▶ 다른 브랜드 레티놀 비교</div>
+</section>
+
+<script>
+const LEAD=.4,GAP=.6,TAIL=2.4,D=window.DUR,scenes=[...document.querySelectorAll('.scene')];let acc=LEAD;const S=[];
+D.forEach((d,i)=>{S.push(acc);acc+=d+(i<D.length-1?GAP:0);});window.TOTAL=acc+TAIL;window.S=S;
+const win=scenes.map((el,i)=>[i?S[i]-GAP/2:0,i<D.length-1?S[i+1]-GAP/2:window.TOTAL]);
+scenes.forEach((el,i)=>{el.style.setProperty('--s',S[i]+'s');el.style.setProperty('--d',D[i]+'s');el.style.setProperty('--w',(win[i][1]-win[i][0]+.3)+'s');});
+const VN=window.VLOG_N||1,vlogs=[...document.querySelectorAll('img.vlog')].map(im=>({im,i:scenes.indexOf(im.closest('.scene')),off:+im.dataset.off,cur:''}));
+const grain=document.getElementById('grain'),bar=document.getElementById('bar');
+window.setTime=async t=>{scenes.forEach((el,i)=>{el.style.visibility=(t>=win[i][0]&&t<win[i][1])?'visible':'hidden';});const g=Math.floor(t*12);grain.style.transform=`translate(${(g*37)%50-25}px,${(g*53)%50-25}px)`;bar.style.width=(t/window.TOTAL*100)+'%';document.getAnimations().forEach(a=>{a.currentTime=t*1000;});
+ const ps=[];for(const v of vlogs){if(t<win[v.i][0]-.5||t>=win[v.i][1]+.5)continue;const n=Math.min(VN,Math.max(1,Math.floor((t-S[v.i]+v.off)*30)+1));const src='img/vlog/'+String(n).padStart(4,'0')+'.jpg';if(src!==v.cur){v.cur=src;v.im.src=src;ps.push(v.im.decode().catch(()=>0));}}await Promise.all(ps);};
+(async()=>{const txt=document.body.innerText;await Promise.all(['400','700','900'].map(w=>document.fonts.load(`${w} 40px "Noto Sans KR"`,txt)).concat([document.fonts.load('900 40px "Noto Serif KR"',txt),document.fonts.load('40px "Nanum Pen Script"',txt)]));await document.fonts.ready;await Promise.all([...document.images].map(im=>im.complete?1:new Promise(r=>{im.onload=im.onerror=r;})));await window.setTime(0);window.READY=true;})();
+</script></body></html>
